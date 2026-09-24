@@ -39,3 +39,124 @@ model ReportHistory {
   createdAt   DateTime @default(now())
   isSnapshot  Boolean  @default(false) // true = pakai data terkunci, false = live
 }
+
+// ---- Mirror tables: synced from Plane so the app never hits Plane's API on
+// a normal page load (that's what caused the rate-limit issue). Populated by
+// lib/sync.ts, triggered manually via POST /api/sync/run. Every table here
+// is fully replaced per project on each sync (delete + createMany), not
+// incrementally upserted, so deletions on the Plane side are reflected too.
+
+model Project {
+  id           String   @id
+  name         String
+  identifier   String
+  memberCount  Int
+  totalCycles  Int
+  totalModules Int
+  estimateId   String?
+  syncedAt     DateTime @default(now())
+}
+
+// Global — a person can be a member of several projects.
+model Member {
+  id          String   @id
+  firstName   String
+  lastName    String
+  email       String
+  displayName String
+  syncedAt    DateTime @default(now())
+}
+
+model ProjectMember {
+  projectId String
+  memberId  String
+  role      Int?
+
+  @@id([projectId, memberId])
+  @@index([memberId])
+}
+
+model State {
+  id        String @id
+  projectId String
+  name      String
+  color     String
+  group     String // backlog | unstarted | started | completed | cancelled
+  sequence  Float
+
+  @@index([projectId])
+}
+
+model Label {
+  id        String @id
+  projectId String
+  name      String
+  color     String
+
+  @@index([projectId])
+}
+
+model Cycle {
+  id              String    @id
+  projectId       String
+  name            String
+  startDate       DateTime?
+  endDate         DateTime?
+  totalIssues     Int
+  completedIssues Int
+  cancelledIssues Int
+  startedIssues   Int
+  unstartedIssues Int
+  backlogIssues   Int
+
+  @@index([projectId])
+}
+
+model Module {
+  id              String @id
+  projectId       String
+  name            String
+  totalIssues     Int
+  completedIssues Int
+
+  @@index([projectId])
+}
+
+model WorkItem {
+  id             String    @id
+  projectId      String
+  name           String
+  sequenceId     Int
+  priority       String
+  stateId        String
+  stateGroup     String // denormalized from State.group for fast filtering
+  assignees      String[]
+  labels         String[]
+  // Opaque estimate-system option reference (UUID) — Plane's public API has
+  // no endpoint to resolve this to a number. See lib/recap.ts.
+  estimatePoint  String?
+  point          Int?
+  startDate      DateTime?
+  targetDate     DateTime?
+  createdAtPlane DateTime
+  completedAt    DateTime?
+  // Resolved at sync time via /cycles/{id}/cycle-issues/ and
+  // /modules/{id}/module-issues/ — not a field Plane exposes on the item.
+  cycleId        String?
+  moduleIds      String[]
+
+  @@index([projectId])
+  @@index([projectId, stateGroup])
+  @@index([cycleId])
+  @@index([createdAtPlane])
+}
+
+model SyncRun {
+  id              String    @id @default(cuid())
+  startedAt       DateTime  @default(now())
+  finishedAt      DateTime?
+  status          String // running | success | failed
+  projectsSynced  Int       @default(0)
+  workItemsSynced Int       @default(0)
+  error           String?
+}

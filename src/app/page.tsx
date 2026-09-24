@@ -49,9 +49,18 @@ export default function OverviewPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="text-neutral-500">Memuat data dari Plane...</p>;
+  if (loading) return <p className="text-neutral-500">Memuat data...</p>;
   if (error) return <ConfigNotice message={error} />;
   if (!data) return null;
+
+  if (data.projects.length === 0) {
+    return (
+      <div className="rounded-lg border border-neutral-200 bg-white p-6 text-sm text-neutral-600">
+        <p className="font-medium text-neutral-900">Belum ada data tersinkronisasi.</p>
+        <p className="mt-1">Klik &quot;Sync Now&quot; di pojok kanan atas untuk menarik data dari Plane pertama kali.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

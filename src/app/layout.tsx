@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import SyncStatus from "@/components/SyncStatus";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 </Link>
               ))}
             </nav>
+            <SyncStatus />
           </div>
         </header>
         <main className="flex-1 mx-auto w-full max-w-6xl px-6 py-8">{children}</main>

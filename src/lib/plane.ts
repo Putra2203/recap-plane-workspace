@@ -42,11 +42,25 @@ async function planeGet<T>(path: string, params?: Record<string, string | number
   }
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(url.toString(), {
-      headers: { "X-API-Key": API_TOKEN, "Content-Type": "application/json" },
-      // Analytics/report pages want fresh data; caller can wrap with Next.js cache if needed.
-      cache: "no-store",
-    });
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), {
+        headers: { "X-API-Key": API_TOKEN, "Content-Type": "application/json" },
+        // Analytics/report pages want fresh data; caller can wrap with Next.js cache if needed.
+        cache: "no-store",
+      });
+    } catch (networkErr) {
+      // Cloudflare in front of this instance sometimes resets the
+      // connection outright under burst load instead of returning a clean
+      // 429, which surfaces here as a generic fetch TypeError.
+      if (attempt < MAX_RETRIES) {
+        await sleep(500 * 2 ** attempt);
+        continue;
+      }
+      const message = networkErr instanceof Error ? networkErr.message : String(networkErr);
+      throw new PlaneApiError(`Network error after ${MAX_RETRIES} retries on ${path}: ${message}`, 0, null);
+    }
+
     if (res.ok) return res.json() as Promise<T>;
 
     if (res.status === 429 && attempt < MAX_RETRIES) {

@@ -1,6 +1,6 @@
-import { planeClient } from "./plane";
-import { getAllProjectBundles, getCycleModuleMembership, getProjectBundle } from "./data";
-import { computeMemberRecap, computeProgress, type MemberRecapRow, type ProgressStats } from "./recap";
+import { prisma } from "./prisma";
+import { getMemberRecapData, getProjectDetailData } from "./db-queries";
+import type { MemberRecapRow, ProgressStats } from "./recap";
 
 export type ReportType = "project" | "monthly_point";
 
@@ -39,63 +39,40 @@ export async function buildReport(params: ReportParams): Promise<Report> {
 
   if (params.type === "project") {
     if (!params.projectId) throw new Error("projectId wajib diisi untuk laporan project");
-    const [projects, bundle] = await Promise.all([planeClient.listProjects(), getProjectBundle(params.projectId)]);
-    const project = projects.find((p) => p.id === params.projectId);
-    const progress = computeProgress(bundle.items, bundle.statesById);
+    const [project, detail] = await Promise.all([
+      prisma.project.findUnique({ where: { id: params.projectId } }),
+      getProjectDetailData(params.projectId),
+    ]);
     return {
       type: "project",
       projectName: project?.name ?? params.projectId,
       period: { start: params.periodStart, end: params.periodEnd },
-      progress,
+      progress: detail.progress,
       generatedAt,
     };
   }
 
   // monthly_point
-  const projectIds = params.projectId ? [params.projectId] : (await planeClient.listProjects()).map((p) => p.id);
-  const bundles = params.projectId
-    ? [{ projectId: params.projectId, ...(await getProjectBundle(params.projectId)) }]
-    : await getAllProjectBundles(projectIds);
-
-  const merged = new Map<string, MemberRecapRow>();
-  for (const bundle of bundles) {
-    const membership =
-      params.cycleId || params.moduleId
-        ? await getCycleModuleMembership(bundle.projectId, bundle.cycles, bundle.modules)
-        : undefined;
-    const rows = computeMemberRecap(bundle.items, bundle.statesById, bundle.members, {
-      periodStart,
-      periodEnd,
-      cycleId: params.cycleId,
-      moduleId: params.moduleId,
-      assigneeId: params.assigneeId,
-      itemCycleId: membership?.itemCycleId,
-      itemModuleIds: membership?.itemModuleIds,
-    });
-    for (const row of rows) {
-      const existing = merged.get(row.memberId);
-      if (existing) {
-        existing.doneTask += row.doneTask;
-        existing.totalPoint += row.totalPoint;
-        existing.uncountedEstimateTask += row.uncountedEstimateTask;
-        existing.tasks.push(...row.tasks);
-      } else {
-        merged.set(row.memberId, { ...row, tasks: [...row.tasks] });
-      }
-    }
-  }
+  const rows = await getMemberRecapData({
+    periodStart,
+    periodEnd,
+    projectId: params.projectId,
+    cycleId: params.cycleId,
+    moduleId: params.moduleId,
+    assigneeId: params.assigneeId,
+  });
 
   let scopeName = "Semua Project";
   if (params.projectId) {
-    const projects = await planeClient.listProjects();
-    scopeName = projects.find((p) => p.id === params.projectId)?.name ?? params.projectId;
+    const project = await prisma.project.findUnique({ where: { id: params.projectId } });
+    scopeName = project?.name ?? params.projectId;
   }
 
   return {
     type: "monthly_point",
     scopeName,
     period: { start: params.periodStart, end: params.periodEnd },
-    rows: [...merged.values()].sort((a, b) => b.totalPoint - a.totalPoint),
+    rows,
     generatedAt,
   };
 }
