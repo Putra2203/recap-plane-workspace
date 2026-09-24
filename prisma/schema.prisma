@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Rekap point bulanan yang sudah dikunci (PRD 15.1.6 / 16 / 18).
+// Setelah locked=true, angka tidak berubah lagi walau data Plane berubah.
+model MonthlySnapshot {
+  id               String   @id @default(cuid())
+  period           String // format "2026-09" (YYYY-MM)
+  projectId        String
+  projectName      String
+  cycleId          String?
+  memberId         String
+  memberName       String
+  totalAssignedTask Int
+  completedTask    Int
+  totalEstimate    Float
+  completedEstimate Float
+  locked           Boolean  @default(false)
+  snapshotDate     DateTime @default(now())
+
+  @@unique([period, projectId, memberId, cycleId])
+  @@index([period])
+}
+
+// Riwayat laporan yang pernah dibuat (PRD 33.9).
+model ReportHistory {
+  id          String   @id @default(cuid())
+  name        String
+  type        String // task | member | project | cycle | module | monthly_point | custom
+  filters     String // JSON string
+  createdBy   String
+  createdAt   DateTime @default(now())
+  isSnapshot  Boolean  @default(false) // true = pakai data terkunci, false = live
+}
