@@ -33,6 +33,7 @@ interface MonthlyPointReport {
   type: "monthly_point";
   scopeName: string;
   period: { start: string; end: string };
+  dateBasis: "created" | "completed";
   rows: { memberId: string; memberName: string; doneTask: number; totalPoint: number; uncountedEstimateTask: number }[];
   generatedAt: string;
 }
@@ -56,6 +57,7 @@ export default function ReportsPage() {
   const [projectId, setProjectId] = useState("");
   const [periodStart, setPeriodStart] = useState(thisMonth.start);
   const [periodEnd, setPeriodEnd] = useState(thisMonth.end);
+  const [dateBasis, setDateBasis] = useState<"created" | "completed">("created");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +83,7 @@ export default function ReportsPage() {
     fetch("/api/reports/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, projectId: projectId || undefined, periodStart, periodEnd }),
+      body: JSON.stringify({ type, projectId: projectId || undefined, periodStart, periodEnd, dateBasis }),
     })
       .then(async (res) => {
         const body = await res.json();
@@ -93,7 +95,7 @@ export default function ReportsPage() {
   };
 
   const exportParams = () => {
-    const params = new URLSearchParams({ type, periodStart, periodEnd });
+    const params = new URLSearchParams({ type, periodStart, periodEnd, dateBasis });
     if (projectId) params.set("projectId", projectId);
     return params.toString();
   };
@@ -132,6 +134,15 @@ export default function ReportsPage() {
           Sampai
           <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
         </label>
+        {type === "monthly_point" && (
+          <label className="flex flex-col text-sm">
+            Basis Tanggal
+            <select value={dateBasis} onChange={(e) => setDateBasis(e.target.value as "created" | "completed")} className="rounded border border-neutral-300 px-2 py-1">
+              <option value="created">Created Date</option>
+              <option value="completed">Completed Date</option>
+            </select>
+          </label>
+        )}
         <button onClick={generate} disabled={loading} className="rounded bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-50">
           {loading ? "Memuat..." : "Preview"}
         </button>
@@ -156,6 +167,7 @@ export default function ReportsPage() {
           </div>
           <p className="text-sm text-neutral-500">
             Periode: {report.period.start} s/d {report.period.end}
+            {report.type === "monthly_point" && ` (${report.dateBasis === "completed" ? "Completed Date" : "Created Date"})`}
           </p>
 
           {report.type === "project" ? (

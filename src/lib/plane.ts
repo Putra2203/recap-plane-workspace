@@ -127,6 +127,19 @@ export interface PlaneState {
   sequence: number;
 }
 
+// With ?expand=estimate_point, Plane resolves the estimate-system option
+// reference into its actual value instead of returning a bare UUID. `value`
+// is per-project — the same UUID means a different number in a different
+// project's estimate scale, so it must always be read from this expanded
+// object, never looked up in a cross-project UUID table. An item with no
+// estimate assigned still comes back as an object (not null) but with
+// key: null and value: "". Confirmed against a live instance 2026-09-24.
+export interface PlaneEstimatePoint {
+  id?: string;
+  key: number | null;
+  value: string;
+}
+
 export interface PlaneWorkItem {
   id: string;
   name: string;
@@ -135,13 +148,9 @@ export interface PlaneWorkItem {
   state: string;
   assignees: string[];
   labels: string[];
-  // Reference to an estimate-system OPTION (a UUID), not a numeric value.
-  // Plane's public REST API has no endpoint to resolve what that option
-  // means (confirmed 404 on /estimates/, /estimate-points/, etc. — and no
-  // MCP tool exists for it either). Only presence/absence is knowable here.
-  estimate_point: string | null;
+  estimate_point: PlaneEstimatePoint | null;
   // Separate legacy numeric story-point field. This IS a plain number and
-  // is what recap math should actually sum.
+  // is summed the same way as a resolved estimate_point.value.
   point?: number | null;
   start_date: string | null;
   target_date: string | null;
@@ -192,7 +201,7 @@ export const planeClient = {
   listProjects: () => withCache("projects", 120_000, () => planeGetAllPages<PlaneProject>("/projects/")),
 
   listWorkItems: (projectId: string) =>
-    planeGetAllPages<PlaneWorkItem>(`/projects/${projectId}/issues/`),
+    planeGetAllPages<PlaneWorkItem>(`/projects/${projectId}/issues/`, { expand: "estimate_point" }),
 
   listStates: (projectId: string) =>
     planeGetAllPages<PlaneState>(`/projects/${projectId}/states/`),

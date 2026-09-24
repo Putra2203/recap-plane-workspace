@@ -43,7 +43,7 @@ function renderPdf(report: Report): Promise<Buffer> {
       doc.fontSize(18).text("Rekap Point Anggota Tim", { underline: true });
       doc.moveDown();
       doc.fontSize(12).text(`Scope: ${report.scopeName}`);
-      doc.text(`Periode (Created Date): ${report.period.start} s/d ${report.period.end}`);
+      doc.text(`Periode (${report.dateBasis === "completed" ? "Completed Date" : "Created Date"}): ${report.period.start} s/d ${report.period.end}`);
       doc.moveDown();
       doc.fontSize(14).text("Rekap");
       doc.moveDown(0.5);
@@ -77,6 +77,7 @@ export async function GET(req: Request) {
       type,
       periodStart,
       periodEnd,
+      dateBasis: searchParams.get("dateBasis") === "completed" ? "completed" : "created",
       projectId: searchParams.get("projectId") ?? undefined,
       cycleId: searchParams.get("cycleId") ?? undefined,
       moduleId: searchParams.get("moduleId") ?? undefined,

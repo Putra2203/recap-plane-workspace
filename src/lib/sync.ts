@@ -58,6 +58,8 @@ function toWorkItemRow(
   itemCycleId: Map<string, string>,
   itemModuleIds: Map<string, Set<string>>,
 ) {
+  const parsedEstimateValue = item.estimate_point?.value ? Number(item.estimate_point.value) : NaN;
+
   return {
     id: item.id,
     projectId,
@@ -68,7 +70,8 @@ function toWorkItemRow(
     stateGroup: statesById.get(item.state)?.group ?? "backlog",
     assignees: item.assignees,
     labels: item.labels,
-    estimatePoint: item.estimate_point,
+    estimatePoint: item.estimate_point?.id ?? null,
+    estimatePointValue: Number.isFinite(parsedEstimateValue) ? parsedEstimateValue : null,
     point: item.point ?? null,
     startDate: item.start_date ? new Date(item.start_date) : null,
     targetDate: item.target_date ? new Date(item.target_date) : null,

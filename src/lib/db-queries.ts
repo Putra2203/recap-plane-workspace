@@ -28,8 +28,16 @@ function rowToWorkItem(row: DbWorkItem): PlaneWorkItem {
     state: row.stateId,
     assignees: row.assignees,
     labels: row.labels,
-    estimate_point: row.estimatePoint,
-    point: row.point,
+    // estimatePointValue was already resolved at sync time via
+    // expand=estimate_point (per-project scale, see lib/sync.ts) — fold it
+    // into `point` so recap.ts's numericEstimateOf sums it unchanged. Keep
+    // estimate_point non-null whenever there was a raw option id, so
+    // hasUncountedEstimate can still flag the rare case where the scale's
+    // value wasn't numeric (a text/category scale) and couldn't be summed.
+    estimate_point: row.estimatePoint
+      ? { id: row.estimatePoint, key: null, value: row.estimatePointValue != null ? String(row.estimatePointValue) : "" }
+      : null,
+    point: row.point ?? row.estimatePointValue ?? null,
     start_date: toIsoDate(row.startDate),
     target_date: toIsoDate(row.targetDate),
     created_at: row.createdAtPlane.toISOString(),
@@ -156,6 +164,7 @@ export async function getProjectDetailData(projectId: string) {
 export interface DbRecapFilters {
   periodStart: Date;
   periodEnd: Date;
+  dateBasis?: "created" | "completed";
   projectId?: string;
   cycleId?: string;
   moduleId?: string;
@@ -183,6 +192,7 @@ export async function getMemberRecapData(filters: DbRecapFilters): Promise<Membe
   const recapFilters: RecapFilters = {
     periodStart: filters.periodStart,
     periodEnd: filters.periodEnd,
+    dateBasis: filters.dateBasis,
     cycleId: filters.cycleId,
     moduleId: filters.moduleId,
     assigneeId: filters.assigneeId,

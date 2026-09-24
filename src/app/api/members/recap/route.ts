@@ -16,9 +16,11 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   try {
     const { periodStart, periodEnd } = parsePeriod(searchParams);
+    const dateBasisParam = searchParams.get("dateBasis");
     const rows = await getMemberRecapData({
       periodStart,
       periodEnd,
+      dateBasis: dateBasisParam === "completed" ? "completed" : "created",
       projectId: searchParams.get("projectId") ?? undefined,
       cycleId: searchParams.get("cycleId") ?? undefined,
       moduleId: searchParams.get("moduleId") ?? undefined,

@@ -11,18 +11,19 @@ export interface ProgressStats {
   taskProgressPct: number;
   estimateProgressPct: number;
   overdueTask: number;
-  // Tasks that only have a categorical estimate (estimate_point, a UUID
-  // option reference Plane's public API cannot resolve to a number) and no
-  // numeric `point`. Excluded from totalEstimate/completedEstimate — surface
-  // this count in the UI so the progress % isn't silently misread as complete.
+  // Items whose estimate_point option couldn't be resolved to a number (a
+  // non-numeric/text estimate scale) and have no numeric `point` either.
+  // Should be rare now that sync resolves estimate_point via
+  // expand=estimate_point — kept as a safety net, not the common case.
   uncountedEstimateTask: number;
 }
 
-// Only the legacy numeric `point` field can be summed. `estimate_point` is a
-// reference to an estimate-system OPTION (UUID) that Plane's public REST API
-// has no endpoint to resolve (verified: /estimates/, /estimate-points/ all
-// 404 on a live instance, and no MCP tool exposes it either). Treating it as
-// a number would silently fabricate data.
+// `point` here is already the fully-resolved number by the time recap.ts
+// sees it: lib/sync.ts reads estimate_point via expand=estimate_point (its
+// `value` is per-project — the same option UUID means a different number in
+// a different project's scale) and lib/db-queries.ts folds that resolved
+// value into `point` for any item that doesn't have the legacy numeric
+// `point` field set directly. See PlaneEstimatePoint in lib/plane.ts.
 function numericEstimateOf(item: PlaneWorkItem): number {
   return typeof item.point === "number" ? item.point : 0;
 }
@@ -94,22 +95,31 @@ export interface MemberRecapRow {
   tasks: { id: string; name: string; point: number; hasUncountedEstimate: boolean; completedAt: string | null }[];
 }
 
+export type DateBasis = "created" | "completed";
+
 export interface RecapFilters {
   periodStart: Date;
   periodEnd: Date; // inclusive
+  // Which date field the period is matched against.
+  // - "created" (default): PRD 15.1.1/15.1.6 business rule — a task counts
+  //   in the period it was created, even if it's only marked Done later.
+  // - "completed": counts a task in the period it was actually finished —
+  //   more intuitive for "who finished what this month", and what most
+  //   people assume "monthly recap" means.
+  dateBasis?: DateBasis;
   projectId?: string;
   cycleId?: string;
   moduleId?: string;
   assigneeId?: string;
   // Work item ID -> cycle ID / module IDs. Required because Plane does not
-  // expose this as a field on the work item — see lib/data.ts.
+  // expose this as a field on the work item — see lib/db-queries.ts.
   itemCycleId?: Map<string, string>;
   itemModuleIds?: Map<string, Set<string>>;
 }
 
 /**
- * Rekap point per anggota tim.
- * Aturan bisnis (PRD 15.1.2): periode diterapkan pada Created Date, status harus Done.
+ * Rekap point per anggota tim. Status harus Done; periode diterapkan pada
+ * Created Date atau Completed Date sesuai filters.dateBasis (PRD 15.1.2).
  */
 export function computeMemberRecap(
   items: PlaneWorkItem[],
@@ -119,11 +129,14 @@ export function computeMemberRecap(
 ): MemberRecapRow[] {
   const rows = new Map<string, MemberRecapRow>();
   const memberById = new Map(members.map((m) => [m.id, m]));
+  const dateBasis = filters.dateBasis ?? "created";
 
   for (const item of items) {
-    const createdAt = new Date(item.created_at);
-    if (createdAt < filters.periodStart || createdAt > filters.periodEnd) continue;
     if (statesById.get(item.state)?.group !== "completed") continue;
+    const basisDateStr = dateBasis === "completed" ? item.completed_at : item.created_at;
+    if (!basisDateStr) continue;
+    const basisDate = new Date(basisDateStr);
+    if (basisDate < filters.periodStart || basisDate > filters.periodEnd) continue;
     if (filters.cycleId && filters.itemCycleId?.get(item.id) !== filters.cycleId) continue;
     if (filters.moduleId && !filters.itemModuleIds?.get(item.id)?.has(filters.moduleId)) continue;
 

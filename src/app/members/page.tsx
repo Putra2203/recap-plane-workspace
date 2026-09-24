@@ -37,6 +37,7 @@ export default function MembersPage() {
   const thisMonth = useMemo(() => monthRange(0), []);
   const [periodStart, setPeriodStart] = useState(thisMonth.start);
   const [periodEnd, setPeriodEnd] = useState(thisMonth.end);
+  const [dateBasis, setDateBasis] = useState<"created" | "completed">("created");
   const [projectId, setProjectId] = useState<string>("");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [cycleId, setCycleId] = useState<string>("");
@@ -87,7 +88,7 @@ export default function MembersPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag must flip synchronously when filters change
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ periodStart, periodEnd });
+    const params = new URLSearchParams({ periodStart, periodEnd, dateBasis });
     if (projectId) params.set("projectId", projectId);
     if (cycleId) params.set("cycleId", cycleId);
     if (moduleId) params.set("moduleId", moduleId);
@@ -106,7 +107,7 @@ export default function MembersPage() {
     return () => {
       ignore = true;
     };
-  }, [periodStart, periodEnd, projectId, cycleId, moduleId]);
+  }, [periodStart, periodEnd, dateBasis, projectId, cycleId, moduleId]);
 
   const applyPreset = (offset: number) => {
     const r = monthRange(offset);
@@ -119,7 +120,8 @@ export default function MembersPage() {
       <div>
         <h1 className="text-xl font-semibold">Rekap Point Anggota Tim</h1>
         <p className="text-sm text-neutral-500">
-          Dihitung dari task berstatus <b>Done</b> berdasarkan <b>Created Date</b> pada periode yang dipilih.
+          Dihitung dari task berstatus <b>Done</b> berdasarkan{" "}
+          <b>{dateBasis === "completed" ? "tanggal task selesai (Completed Date)" : "tanggal task dibuat (Created Date)"}</b> pada periode yang dipilih.
         </p>
       </div>
 
@@ -139,6 +141,13 @@ export default function MembersPage() {
         <label className="flex flex-col text-sm">
           Sampai
           <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
+        </label>
+        <label className="flex flex-col text-sm">
+          Basis Tanggal
+          <select value={dateBasis} onChange={(e) => setDateBasis(e.target.value as "created" | "completed")} className="rounded border border-neutral-300 px-2 py-1">
+            <option value="created">Created Date</option>
+            <option value="completed">Completed Date</option>
+          </select>
         </label>
         <label className="flex flex-col text-sm">
           Project

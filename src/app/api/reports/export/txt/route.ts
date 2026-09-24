@@ -15,6 +15,7 @@ export async function GET(req: Request) {
       type,
       periodStart,
       periodEnd,
+      dateBasis: searchParams.get("dateBasis") === "completed" ? "completed" : "created",
       projectId: searchParams.get("projectId") ?? undefined,
       cycleId: searchParams.get("cycleId") ?? undefined,
       moduleId: searchParams.get("moduleId") ?? undefined,

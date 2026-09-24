@@ -132,10 +132,15 @@ model WorkItem {
   stateGroup     String // denormalized from State.group for fast filtering
   assignees      String[]
   labels         String[]
-  // Opaque estimate-system option reference (UUID) — Plane's public API has
-  // no endpoint to resolve this to a number. See lib/recap.ts.
-  estimatePoint  String?
-  point          Int?
+  // Raw estimate-system option reference (UUID), kept for debugging/display.
+  estimatePoint      String?
+  // Resolved via GET .../issues/?expand=estimate_point — Plane returns the
+  // scale's actual value (e.g. "8") for that option, which is per-project
+  // (the same UUID means a different number in a different project). Null
+  // when the item has no estimate assigned, or the scale's value isn't
+  // numeric (a text/category scale). See lib/sync.ts.
+  estimatePointValue Float?
+  point              Int?
   startDate      DateTime?
   targetDate     DateTime?
   createdAtPlane DateTime

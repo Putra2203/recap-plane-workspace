@@ -9,6 +9,7 @@ export interface ReportParams {
   projectId?: string;
   periodStart: string; // YYYY-MM-DD
   periodEnd: string;
+  dateBasis?: "created" | "completed";
   cycleId?: string;
   moduleId?: string;
   assigneeId?: string;
@@ -26,6 +27,7 @@ export interface MonthlyPointReport {
   type: "monthly_point";
   scopeName: string; // project name or "Semua Project"
   period: { start: string; end: string };
+  dateBasis: "created" | "completed";
   rows: MemberRecapRow[];
   generatedAt: string;
 }
@@ -53,9 +55,11 @@ export async function buildReport(params: ReportParams): Promise<Report> {
   }
 
   // monthly_point
+  const dateBasis = params.dateBasis ?? "created";
   const rows = await getMemberRecapData({
     periodStart,
     periodEnd,
+    dateBasis,
     projectId: params.projectId,
     cycleId: params.cycleId,
     moduleId: params.moduleId,
@@ -72,6 +76,7 @@ export async function buildReport(params: ReportParams): Promise<Report> {
     type: "monthly_point",
     scopeName,
     period: { start: params.periodStart, end: params.periodEnd },
+    dateBasis,
     rows,
     generatedAt,
   };
@@ -102,7 +107,7 @@ export function reportToText(report: Report): string {
   } else {
     lines.push("REKAP POINT ANGGOTA TIM");
     lines.push(`Scope: ${report.scopeName}`);
-    lines.push(`Periode (Created Date): ${report.period.start} s/d ${report.period.end}`);
+    lines.push(`Periode (${report.dateBasis === "completed" ? "Completed Date" : "Created Date"}): ${report.period.start} s/d ${report.period.end}`);
     lines.push("");
     for (const row of report.rows) {
       const note = row.uncountedEstimateTask > 0 ? ` (${row.uncountedEstimateTask} task pakai estimate kategori, tidak terhitung)` : "";
