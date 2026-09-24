@@ -12,11 +12,12 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* This app's components (bg-white cards, text-neutral-* etc.) are only
+   designed for light mode — no dark: variants exist anywhere. Pin the
+   color-scheme so text doesn't inherit a near-white color from an OS/browser
+   dark preference while sitting on hardcoded white/light card backgrounds. */
+:root {
+  color-scheme: light;
 }
 
 body {
