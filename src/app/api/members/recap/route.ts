@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { planeClient, PlaneConfigError } from "@/lib/plane";
-import { getAllProjectBundles, getProjectBundle } from "@/lib/data";
+import { getAllProjectBundles, getCycleModuleMembership, getProjectBundle } from "@/lib/data";
 import { computeMemberRecap, type MemberRecapRow } from "@/lib/recap";
 
 function parsePeriod(searchParams: URLSearchParams) {
@@ -28,18 +28,25 @@ export async function GET(req: Request) {
 
     const merged = new Map<string, MemberRecapRow>();
     for (const bundle of bundles) {
+      const membership =
+        cycleId || moduleId
+          ? await getCycleModuleMembership(bundle.projectId, bundle.cycles, bundle.modules)
+          : undefined;
       const rows = computeMemberRecap(bundle.items, bundle.statesById, bundle.members, {
         periodStart,
         periodEnd,
         cycleId,
         moduleId,
         assigneeId,
+        itemCycleId: membership?.itemCycleId,
+        itemModuleIds: membership?.itemModuleIds,
       });
       for (const row of rows) {
         const existing = merged.get(row.memberId);
         if (existing) {
           existing.doneTask += row.doneTask;
           existing.totalPoint += row.totalPoint;
+          existing.uncountedEstimateTask += row.uncountedEstimateTask;
           existing.tasks.push(...row.tasks);
         } else {
           merged.set(row.memberId, { ...row, tasks: [...row.tasks] });

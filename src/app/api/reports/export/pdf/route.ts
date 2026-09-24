@@ -29,6 +29,16 @@ function renderPdf(report: Report): Promise<Buffer> {
       doc.text(`Total Estimate: ${report.progress.totalEstimate}`);
       doc.text(`Completed Estimate: ${report.progress.completedEstimate}`);
       doc.text(`Overdue Task: ${report.progress.overdueTask}`);
+      if (report.progress.uncountedEstimateTask > 0) {
+        doc.moveDown(0.5);
+        doc
+          .fontSize(9)
+          .fillColor("gray")
+          .text(
+            `Catatan: ${report.progress.uncountedEstimateTask} task pakai estimate kategori (bukan angka) yang tidak bisa dikonversi lewat Plane API, jadi tidak masuk hitungan estimate di atas.`,
+          );
+        doc.fillColor("black").fontSize(11);
+      }
     } else {
       doc.fontSize(18).text("Rekap Point Anggota Tim", { underline: true });
       doc.moveDown();
@@ -42,7 +52,8 @@ function renderPdf(report: Report): Promise<Buffer> {
         doc.text("(Tidak ada task Done pada periode ini)");
       }
       for (const row of report.rows) {
-        doc.text(`${row.memberName}  —  ${row.totalPoint} point  —  ${row.doneTask} task Done`);
+        const note = row.uncountedEstimateTask > 0 ? `  (${row.uncountedEstimateTask} task estimate kategori tidak terhitung)` : "";
+        doc.text(`${row.memberName}  —  ${row.totalPoint} point  —  ${row.doneTask} task Done${note}`);
       }
     }
 

@@ -8,10 +8,16 @@ interface MemberRow {
   memberName: string;
   doneTask: number;
   totalPoint: number;
-  tasks: { id: string; name: string; point: number; completedAt: string | null }[];
+  uncountedEstimateTask: number;
+  tasks: { id: string; name: string; point: number; hasUncountedEstimate: boolean; completedAt: string | null }[];
 }
 
 interface ProjectOption {
+  id: string;
+  name: string;
+}
+
+interface FilterOption {
   id: string;
   name: string;
 }
@@ -33,6 +39,10 @@ export default function MembersPage() {
   const [periodEnd, setPeriodEnd] = useState(thisMonth.end);
   const [projectId, setProjectId] = useState<string>("");
   const [projects, setProjects] = useState<ProjectOption[]>([]);
+  const [cycleId, setCycleId] = useState<string>("");
+  const [moduleId, setModuleId] = useState<string>("");
+  const [cycles, setCycles] = useState<FilterOption[]>([]);
+  const [modules, setModules] = useState<FilterOption[]>([]);
   const [rows, setRows] = useState<MemberRow[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,11 +59,38 @@ export default function MembersPage() {
 
   useEffect(() => {
     let ignore = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- cycle/module filters must reset synchronously when project changes
+    setCycleId("");
+    setModuleId("");
+    if (!projectId) {
+      setCycles([]);
+      setModules([]);
+      return () => {
+        ignore = true;
+      };
+    }
+    fetch(`/api/projects/${projectId}`)
+      .then((res) => res.json())
+      .then((body) => {
+        if (ignore) return;
+        setCycles((body.cycles ?? []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
+        setModules((body.modules ?? []).map((m: { id: string; name: string }) => ({ id: m.id, name: m.name })));
+      })
+      .catch(() => {});
+    return () => {
+      ignore = true;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    let ignore = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag must flip synchronously when filters change
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ periodStart, periodEnd });
     if (projectId) params.set("projectId", projectId);
+    if (cycleId) params.set("cycleId", cycleId);
+    if (moduleId) params.set("moduleId", moduleId);
     fetch(`/api/members/recap?${params.toString()}`)
       .then(async (res) => {
         const body = await res.json();
@@ -69,7 +106,7 @@ export default function MembersPage() {
     return () => {
       ignore = true;
     };
-  }, [periodStart, periodEnd, projectId]);
+  }, [periodStart, periodEnd, projectId, cycleId, moduleId]);
 
   const applyPreset = (offset: number) => {
     const r = monthRange(offset);
@@ -114,6 +151,38 @@ export default function MembersPage() {
             ))}
           </select>
         </label>
+        <label className="flex flex-col text-sm">
+          Cycle
+          <select
+            value={cycleId}
+            onChange={(e) => setCycleId(e.target.value)}
+            disabled={!projectId || cycles.length === 0}
+            className="rounded border border-neutral-300 px-2 py-1 disabled:bg-neutral-100 disabled:text-neutral-400"
+          >
+            <option value="">Semua Cycle</option>
+            {cycles.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col text-sm">
+          Module
+          <select
+            value={moduleId}
+            onChange={(e) => setModuleId(e.target.value)}
+            disabled={!projectId || modules.length === 0}
+            className="rounded border border-neutral-300 px-2 py-1 disabled:bg-neutral-100 disabled:text-neutral-400"
+          >
+            <option value="">Semua Module</option>
+            {modules.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {error && <ConfigNotice message={error} />}
@@ -136,7 +205,14 @@ export default function MembersPage() {
                   <tr className="border-t border-neutral-100">
                     <td className="px-4 py-2 font-medium">{row.memberName}</td>
                     <td className="px-4 py-2">{row.doneTask}</td>
-                    <td className="px-4 py-2">{row.totalPoint}</td>
+                    <td className="px-4 py-2">
+                      {row.totalPoint}
+                      {row.uncountedEstimateTask > 0 && (
+                        <span className="ml-2 text-xs text-amber-600" title="Task dengan estimate kategori (bukan angka) tidak ikut dijumlah — keterbatasan Plane API">
+                          +{row.uncountedEstimateTask} tidak terhitung
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right">
                       <button
                         onClick={() => setExpanded(expanded === row.memberId ? null : row.memberId)}
@@ -152,7 +228,7 @@ export default function MembersPage() {
                         <ul className="space-y-1 text-xs text-neutral-600">
                           {row.tasks.map((t) => (
                             <li key={t.id}>
-                              {t.name} — {t.point} point
+                              {t.name} — {t.hasUncountedEstimate ? "estimate kategori (tidak terhitung)" : `${t.point} point`}
                             </li>
                           ))}
                         </ul>

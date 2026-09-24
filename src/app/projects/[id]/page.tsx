@@ -15,6 +15,7 @@ interface ProjectDetail {
     taskProgressPct: number;
     estimateProgressPct: number;
     overdueTask: number;
+    uncountedEstimateTask: number;
   };
   cycles: { id: string; name: string; total_issues: number; completed_issues: number; taskProgressPct: number }[];
   modules: { id: string; name: string; total_issues: number; completed_issues: number; taskProgressPct: number }[];
@@ -52,6 +53,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <StatCard label="Overdue" value={data.progress.overdueTask} />
         <StatCard label="Member" value={data.members.length} />
       </div>
+
+      {data.progress.uncountedEstimateTask > 0 && (
+        <p className="text-xs text-amber-600">
+          {data.progress.uncountedEstimateTask} task pakai estimate kategori (bukan angka) yang tidak bisa dikonversi lewat Plane API — tidak masuk hitungan Estimate Progress di atas.
+        </p>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-neutral-600">Cycle</h2>

@@ -11,12 +11,24 @@ export interface ProgressStats {
   taskProgressPct: number;
   estimateProgressPct: number;
   overdueTask: number;
+  // Tasks that only have a categorical estimate (estimate_point, a UUID
+  // option reference Plane's public API cannot resolve to a number) and no
+  // numeric `point`. Excluded from totalEstimate/completedEstimate — surface
+  // this count in the UI so the progress % isn't silently misread as complete.
+  uncountedEstimateTask: number;
 }
 
-function estimateOf(item: PlaneWorkItem): number {
-  const raw = item.point ?? item.estimate_point;
-  const n = typeof raw === "string" ? Number(raw) : raw;
-  return Number.isFinite(n) ? (n as number) : 0;
+// Only the legacy numeric `point` field can be summed. `estimate_point` is a
+// reference to an estimate-system OPTION (UUID) that Plane's public REST API
+// has no endpoint to resolve (verified: /estimates/, /estimate-points/ all
+// 404 on a live instance, and no MCP tool exposes it either). Treating it as
+// a number would silently fabricate data.
+function numericEstimateOf(item: PlaneWorkItem): number {
+  return typeof item.point === "number" ? item.point : 0;
+}
+
+function hasUncountedEstimate(item: PlaneWorkItem): boolean {
+  return item.point == null && item.estimate_point != null;
 }
 
 function pct(numerator: number, denominator: number): number {
@@ -32,12 +44,14 @@ export function computeProgress(items: PlaneWorkItem[], statesById: Map<string, 
     cancelledTask = 0,
     totalEstimate = 0,
     completedEstimate = 0,
-    overdueTask = 0;
+    overdueTask = 0,
+    uncountedEstimateTask = 0;
 
   for (const item of items) {
     const group = statesById.get(item.state)?.group;
-    const est = estimateOf(item);
+    const est = numericEstimateOf(item);
     totalEstimate += est;
+    if (hasUncountedEstimate(item)) uncountedEstimateTask++;
 
     if (group === "completed") {
       completedTask++;
@@ -67,6 +81,7 @@ export function computeProgress(items: PlaneWorkItem[], statesById: Map<string, 
     taskProgressPct: pct(completedTask, totalTask),
     estimateProgressPct: pct(completedEstimate, totalEstimate),
     overdueTask,
+    uncountedEstimateTask,
   };
 }
 
@@ -75,7 +90,8 @@ export interface MemberRecapRow {
   memberName: string;
   doneTask: number;
   totalPoint: number;
-  tasks: { id: string; name: string; point: number; completedAt: string | null }[];
+  uncountedEstimateTask: number;
+  tasks: { id: string; name: string; point: number; hasUncountedEstimate: boolean; completedAt: string | null }[];
 }
 
 export interface RecapFilters {
@@ -85,6 +101,10 @@ export interface RecapFilters {
   cycleId?: string;
   moduleId?: string;
   assigneeId?: string;
+  // Work item ID -> cycle ID / module IDs. Required because Plane does not
+  // expose this as a field on the work item — see lib/data.ts.
+  itemCycleId?: Map<string, string>;
+  itemModuleIds?: Map<string, Set<string>>;
 }
 
 /**
@@ -104,23 +124,26 @@ export function computeMemberRecap(
     const createdAt = new Date(item.created_at);
     if (createdAt < filters.periodStart || createdAt > filters.periodEnd) continue;
     if (statesById.get(item.state)?.group !== "completed") continue;
-    if (filters.cycleId && item.cycle !== filters.cycleId) continue;
-    if (filters.moduleId && !item.module_ids?.includes(filters.moduleId)) continue;
+    if (filters.cycleId && filters.itemCycleId?.get(item.id) !== filters.cycleId) continue;
+    if (filters.moduleId && !filters.itemModuleIds?.get(item.id)?.has(filters.moduleId)) continue;
 
     for (const assigneeId of item.assignees) {
       if (filters.assigneeId && assigneeId !== filters.assigneeId) continue;
       const member = memberById.get(assigneeId);
-      const point = estimateOf(item);
+      const point = numericEstimateOf(item);
+      const uncounted = hasUncountedEstimate(item);
       const existing = rows.get(assigneeId) ?? {
         memberId: assigneeId,
         memberName: member?.display_name ?? member?.email ?? "Unknown",
         doneTask: 0,
         totalPoint: 0,
+        uncountedEstimateTask: 0,
         tasks: [],
       };
       existing.doneTask += 1;
       existing.totalPoint += point;
-      existing.tasks.push({ id: item.id, name: item.name, point, completedAt: item.completed_at });
+      if (uncounted) existing.uncountedEstimateTask += 1;
+      existing.tasks.push({ id: item.id, name: item.name, point, hasUncountedEstimate: uncounted, completedAt: item.completed_at });
       rows.set(assigneeId, existing);
     }
   }

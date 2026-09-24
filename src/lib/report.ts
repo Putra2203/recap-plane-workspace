@@ -1,5 +1,5 @@
 import { planeClient } from "./plane";
-import { getAllProjectBundles, getProjectBundle } from "./data";
+import { getAllProjectBundles, getCycleModuleMembership, getProjectBundle } from "./data";
 import { computeMemberRecap, computeProgress, type MemberRecapRow, type ProgressStats } from "./recap";
 
 export type ReportType = "project" | "monthly_point";
@@ -59,18 +59,25 @@ export async function buildReport(params: ReportParams): Promise<Report> {
 
   const merged = new Map<string, MemberRecapRow>();
   for (const bundle of bundles) {
+    const membership =
+      params.cycleId || params.moduleId
+        ? await getCycleModuleMembership(bundle.projectId, bundle.cycles, bundle.modules)
+        : undefined;
     const rows = computeMemberRecap(bundle.items, bundle.statesById, bundle.members, {
       periodStart,
       periodEnd,
       cycleId: params.cycleId,
       moduleId: params.moduleId,
       assigneeId: params.assigneeId,
+      itemCycleId: membership?.itemCycleId,
+      itemModuleIds: membership?.itemModuleIds,
     });
     for (const row of rows) {
       const existing = merged.get(row.memberId);
       if (existing) {
         existing.doneTask += row.doneTask;
         existing.totalPoint += row.totalPoint;
+        existing.uncountedEstimateTask += row.uncountedEstimateTask;
         existing.tasks.push(...row.tasks);
       } else {
         merged.set(row.memberId, { ...row, tasks: [...row.tasks] });
@@ -109,13 +116,20 @@ export function reportToText(report: Report): string {
     lines.push(`Total Estimate: ${report.progress.totalEstimate}`);
     lines.push(`Completed Estimate: ${report.progress.completedEstimate}`);
     lines.push(`Overdue Task: ${report.progress.overdueTask}`);
+    if (report.progress.uncountedEstimateTask > 0) {
+      lines.push("");
+      lines.push(
+        `Catatan: ${report.progress.uncountedEstimateTask} task punya estimate kategori (bukan angka) yang tidak bisa dikonversi lewat Plane API, sehingga tidak masuk hitungan Total/Completed Estimate di atas.`,
+      );
+    }
   } else {
     lines.push("REKAP POINT ANGGOTA TIM");
     lines.push(`Scope: ${report.scopeName}`);
     lines.push(`Periode (Created Date): ${report.period.start} s/d ${report.period.end}`);
     lines.push("");
     for (const row of report.rows) {
-      lines.push(`${row.memberName} - ${row.totalPoint} point - ${row.doneTask} task Done`);
+      const note = row.uncountedEstimateTask > 0 ? ` (${row.uncountedEstimateTask} task pakai estimate kategori, tidak terhitung)` : "";
+      lines.push(`${row.memberName} - ${row.totalPoint} point - ${row.doneTask} task Done${note}`);
     }
     if (report.rows.length === 0) lines.push("(Tidak ada task Done pada periode ini)");
   }

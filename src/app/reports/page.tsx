@@ -24,6 +24,7 @@ interface ProjectReport {
     taskProgressPct: number;
     estimateProgressPct: number;
     overdueTask: number;
+    uncountedEstimateTask: number;
   };
   generatedAt: string;
 }
@@ -32,7 +33,7 @@ interface MonthlyPointReport {
   type: "monthly_point";
   scopeName: string;
   period: { start: string; end: string };
-  rows: { memberId: string; memberName: string; doneTask: number; totalPoint: number }[];
+  rows: { memberId: string; memberName: string; doneTask: number; totalPoint: number; uncountedEstimateTask: number }[];
   generatedAt: string;
 }
 
@@ -167,6 +168,11 @@ export default function ReportsPage() {
               <div>Overdue: <b>{report.progress.overdueTask}</b></div>
               <div>Total Estimate: <b>{report.progress.totalEstimate}</b></div>
               <div>Completed Estimate: <b>{report.progress.completedEstimate}</b></div>
+              {report.progress.uncountedEstimateTask > 0 && (
+                <div className="col-span-2 sm:col-span-4 text-xs text-amber-600">
+                  {report.progress.uncountedEstimateTask} task pakai estimate kategori (bukan angka) yang tidak bisa dikonversi lewat Plane API — tidak masuk hitungan estimate di atas.
+                </div>
+              )}
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -182,7 +188,12 @@ export default function ReportsPage() {
                   <tr key={r.memberId} className="border-t border-neutral-100">
                     <td className="py-1">{r.memberName}</td>
                     <td className="py-1">{r.doneTask}</td>
-                    <td className="py-1">{r.totalPoint}</td>
+                    <td className="py-1">
+                      {r.totalPoint}
+                      {r.uncountedEstimateTask > 0 && (
+                        <span className="ml-2 text-xs text-amber-600">+{r.uncountedEstimateTask} tidak terhitung</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {report.rows.length === 0 && (
