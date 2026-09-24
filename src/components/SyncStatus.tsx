@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { Button } from "@/components/ui/Button";
 
 interface SyncRun {
   id: string;
@@ -62,20 +65,30 @@ export default function SyncStatus() {
       .finally(() => setSyncing(false));
   };
 
+  const label = syncing ? `Syncing... ${elapsed}s` : "Sync";
+  const icon = <RefreshCw className={cn("size-4", syncing && "animate-spin")} />;
+
   return (
-    <div className="flex items-center gap-3 text-xs text-neutral-500">
-      {error && <span className="text-red-600">{error}</span>}
-      {!error && run === undefined && <span>...</span>}
-      {!error && run === null && <span>Belum pernah sync</span>}
-      {!error && run && run.status === "success" && <span>Sync terakhir: {timeAgo(run.finishedAt ?? run.startedAt)}</span>}
-      {!error && run && run.status === "failed" && <span className="text-red-600">Sync terakhir gagal: {run.error}</span>}
-      <button
-        onClick={runSync}
-        disabled={syncing}
-        className="rounded border border-neutral-300 px-3 py-1 font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50"
-      >
-        {syncing ? `Syncing... ${elapsed}s` : "Sync Now"}
-      </button>
+    <div className="flex items-center gap-3 text-xs">
+      {/* Status text — desktop only; mobile keeps just the icon button (plan decision, spec is silent on this text at small widths) */}
+      <span className="hidden sm:inline">
+        {error && <span className="text-danger">{error}</span>}
+        {!error && run === undefined && <span className="text-fg-subtle">...</span>}
+        {!error && run === null && <span className="text-fg-subtle">Belum pernah sync</span>}
+        {!error && run && run.status === "success" && (
+          <span className="text-fg-subtle">Sync terakhir: {timeAgo(run.finishedAt ?? run.startedAt)}</span>
+        )}
+        {!error && run && run.status === "failed" && <span className="text-danger">Sync terakhir gagal: {run.error}</span>}
+      </span>
+
+      {/* Mobile: icon-only */}
+      <Button variant="ghost" size="md" className="aspect-square px-0 sm:hidden" onClick={runSync} disabled={syncing} aria-label="Sync">
+        {icon}
+      </Button>
+      {/* Desktop: icon + text */}
+      <Button variant="ghost" size="md" className="hidden sm:inline-flex" onClick={runSync} disabled={syncing} leftIcon={icon}>
+        {label}
+      </Button>
     </div>
   );
 }

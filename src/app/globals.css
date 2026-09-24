@@ -1,27 +1,101 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Font */
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* Surface */
+  --color-canvas: #f4f2f5;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8f6f9;
+  --color-surface-hover: #f1edf3;
+
+  /* Border */
+  --color-line: #e4dfe7;
+  --color-line-strong: #cfc7d4;
+
+  /* Text */
+  --color-fg: #221a27;          /* judul, angka, isi utama        */
+  --color-fg-muted: #57495f;    /* teks sekunder, label form       */
+  --color-fg-subtle: #6f6177;   /* meta, header tabel, caption     */
+  --color-fg-faint: #a597ac;    /* hanya dekoratif/placeholder (kontras rendah, jangan untuk info penting) */
+  --color-fg-disabled: #cfc7d4;
+
+  /* Primary (aubergine) */
+  --color-primary: #54305f;
+  --color-primary-hover: #43254c;
+  --color-primary-fg: #ffffff;
+  --color-primary-soft: #f1e9f4; /* background state aktif (nav/tab terpilih) */
+  --color-focus: #54305f;
+
+  /* Status */
+  --color-warning: #7f5500;
+  --color-warning-bg: #fdf7e8;
+  --color-warning-line: #edd69a;
+  --color-danger: #a8283a;
+  --color-danger-bg: #fcf0f1;
+  --color-danger-line: #f0c3c8;
+  --color-danger-hover: #8c1f30;
+  --color-success: #246a48;
+  --color-success-bg: #eef6f1;
+  --color-success-line: #c2dece;
+  --color-info: #3d4f7a;
+  --color-info-bg: #eff2f9;
+  --color-info-line: #c9d2e8;
+
+  /* Radius */
+  --radius-control: 4px;
+  --radius-card: 12px;
+
+  /* Type scale compact (ukuran / line-height) */
+  --text-xs: 0.75rem;     --text-xs--line-height: 1rem;       /* 12/16 caption, badge, header tabel */
+  --text-sm: 0.8125rem;   --text-sm--line-height: 1.25rem;    /* 13/20 body default, tabel, input   */
+  --text-base: 0.875rem;  --text-base--line-height: 1.375rem; /* 14/22 paragraf, judul card         */
+  --text-lg: 1rem;        --text-lg--line-height: 1.5rem;     /* 16/24 judul section                */
+  --text-xl: 1.125rem;    --text-xl--line-height: 1.625rem;   /* 18/26 judul halaman mobile         */
+  --text-2xl: 1.375rem;   --text-2xl--line-height: 1.75rem;   /* 22/28 judul halaman desktop, nilai StatCard */
+
+  /* Breakpoint: md resmi ditambahkan untuk switch tabel → card */
+  --breakpoint-sm: 40rem;  /* 640  */
+  --breakpoint-md: 48rem;  /* 768  */
+  --breakpoint-lg: 64rem;  /* 1024 */
 }
 
-/* This app's components (bg-white cards, text-neutral-* etc.) are only
-   designed for light mode — no dark: variants exist anywhere. Pin the
-   color-scheme so text doesn't inherit a near-white color from an OS/browser
-   dark preference while sitting on hardcoded white/light card backgrounds. */
 :root {
   color-scheme: light;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Not in the spec's token block — needed for AppHeader's mobile nav row
+   ("tanpa scrollbar terlihat"), which has no core Tailwind v4 utility. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

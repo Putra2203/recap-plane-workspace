@@ -1,7 +1,16 @@
 import Link from "next/link";
 import ConfigNotice from "@/components/ConfigNotice";
-import StatCard from "@/components/StatCard";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatGrid } from "@/components/ui/StatGrid";
+import { StatCard } from "@/components/ui/StatCard";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { OverdueBadge } from "@/components/ui/Badge";
 import { getOverviewData } from "@/lib/db-queries";
+
+type OverviewData = Awaited<ReturnType<typeof getOverviewData>>;
+type ProjectRow = OverviewData["projects"][number];
 
 // Server Component: data is fetched straight from Postgres during render on
 // the server, so the HTML sent to the browser already has the table filled
@@ -16,76 +25,69 @@ import { getOverviewData } from "@/lib/db-queries";
 // this page "○ Static" before this was added.
 export const dynamic = "force-dynamic";
 
+const columns: Column<ProjectRow>[] = [
+  {
+    key: "project",
+    header: "Project",
+    mobile: "title",
+    cell: (p) => (
+      <Link href={`/projects/${p.id}`} className="font-medium text-fg hover:underline">
+        {p.name}
+      </Link>
+    ),
+  },
+  { key: "taskProgress", header: "Task Progress", align: "right", mobile: "field", cell: (p) => `${p.taskProgressPct}%` },
+  { key: "estimateProgress", header: "Estimate Progress", align: "right", mobile: "field", cell: (p) => `${p.estimateProgressPct}%` },
+  { key: "doneTotal", header: "Done / Total", align: "right", mobile: "field", cell: (p) => `${p.completedTask} / ${p.totalTask}` },
+  {
+    key: "overdue",
+    header: "Overdue",
+    align: "right",
+    mobile: "badge",
+    cell: (p) => (p.overdueTask > 0 ? <OverdueBadge count={p.overdueTask} /> : "0"),
+  },
+  { key: "activeCycle", header: "Cycle Aktif", mobile: "subtitle", cell: (p) => p.activeCycleName ?? "-" },
+];
+
 export default async function OverviewPage() {
-  let data: Awaited<ReturnType<typeof getOverviewData>>;
+  let data: OverviewData;
   try {
     data = await getOverviewData();
   } catch (err) {
     const message = err instanceof Error ? err.message : "Gagal memuat data";
-    return <ConfigNotice message={message} />;
+    return (
+      <PageShell>
+        <ConfigNotice message={message} />
+      </PageShell>
+    );
   }
 
   if (data.projects.length === 0) {
     return (
-      <div className="rounded-lg border border-neutral-200 bg-white p-6 text-sm text-neutral-600">
-        <p className="font-medium text-neutral-900">Belum ada data tersinkronisasi.</p>
-        <p className="mt-1">Klik &quot;Sync Now&quot; di pojok kanan atas untuk menarik data dari Plane pertama kali.</p>
-      </div>
+      <PageShell>
+        {/* No real "Sync sekarang" action button here (as the spec's example copy
+            suggests) — that would duplicate SyncStatus's already-existing Sync
+            button in the header, and this page is a Server Component so it can't
+            wire that button's client-side POST/reload logic itself. Points at
+            the real control instead. */}
+        <EmptyState title="Belum ada data untuk periode ini" description='Klik "Sync Now" di pojok kanan atas untuk menarik task pertama kali dari Plane.' />
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold">Overview Workspace</h1>
-        <p className="text-sm text-neutral-500">Ringkasan seluruh project di workspace Plane kamu.</p>
-      </div>
+    <PageShell>
+      <PageHeader title="Overview Workspace" description="Ringkasan seluruh project di workspace Plane kamu." />
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <StatGrid>
         <StatCard label="Total Project" value={data.projects.length} />
         <StatCard label="Total Task" value={data.totals.totalTask} />
         <StatCard label="Completed Task" value={data.totals.completedTask} />
         <StatCard label="Total Estimate" value={data.totals.totalEstimate} />
-        <StatCard label="Overdue Task" value={data.totals.overdueTask} />
-      </div>
+        <StatCard label="Overdue Task" value={data.totals.overdueTask} tone={data.totals.overdueTask > 0 ? "danger" : "default"} />
+      </StatGrid>
 
-      <div className="space-y-3">
-        <h2 className="text-sm font-medium text-neutral-600">Project</h2>
-        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
-              <tr>
-                <th className="px-4 py-2">Project</th>
-                <th className="px-4 py-2">Task Progress</th>
-                <th className="px-4 py-2">Estimate Progress</th>
-                <th className="px-4 py-2">Done / Total</th>
-                <th className="px-4 py-2">Overdue</th>
-                <th className="px-4 py-2">Cycle Aktif</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.projects.map((p) => (
-                <tr key={p.id} className="border-t border-neutral-100 hover:bg-neutral-50">
-                  <td className="px-4 py-2">
-                    <Link href={`/projects/${p.id}`} className="font-medium text-neutral-900 hover:underline">
-                      {p.name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2">{p.taskProgressPct}%</td>
-                  <td className="px-4 py-2">{p.estimateProgressPct}%</td>
-                  <td className="px-4 py-2">
-                    {p.completedTask} / {p.totalTask}
-                  </td>
-                  <td className="px-4 py-2">
-                    {p.overdueTask > 0 ? <span className="text-red-600">{p.overdueTask}</span> : 0}
-                  </td>
-                  <td className="px-4 py-2 text-neutral-500">{p.activeCycleName ?? "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+      <DataTable<ProjectRow> columns={columns} rows={data.projects} getRowKey={(p) => p.id} caption="Daftar project" />
+    </PageShell>
   );
 }

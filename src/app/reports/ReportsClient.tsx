@@ -1,7 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Download, FileText } from "lucide-react";
 import ConfigNotice from "@/components/ConfigNotice";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader, CardBody } from "@/components/ui/Card";
+import { StatGrid } from "@/components/ui/StatGrid";
+import { StatCard } from "@/components/ui/StatCard";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { EstimateMissingBadge } from "@/components/ui/Badge";
 
 type ReportType = "project" | "monthly_point";
 
@@ -29,12 +42,20 @@ interface ProjectReport {
   generatedAt: string;
 }
 
+interface MonthlyPointRow {
+  memberId: string;
+  memberName: string;
+  doneTask: number;
+  totalPoint: number;
+  uncountedEstimateTask: number;
+}
+
 interface MonthlyPointReport {
   type: "monthly_point";
   scopeName: string;
   period: { start: string; end: string };
   dateBasis: "created" | "completed";
-  rows: { memberId: string; memberName: string; doneTask: number; totalPoint: number; uncountedEstimateTask: number }[];
+  rows: MonthlyPointRow[];
   generatedAt: string;
 }
 
@@ -50,6 +71,23 @@ function monthRange(offset: number) {
   const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0);
   return { start: toISODate(start), end: toISODate(end) };
 }
+
+const monthlyPointColumns: Column<MonthlyPointRow>[] = [
+  { key: "member", header: "Anggota", mobile: "title", cell: (r) => r.memberName },
+  { key: "doneTask", header: "Done Task", align: "right", mobile: "field", cell: (r) => r.doneTask },
+  {
+    key: "totalPoint",
+    header: "Total Point",
+    align: "right",
+    mobile: "field",
+    cell: (r) => (
+      <span className="inline-flex items-center gap-2">
+        <span className="tabular-nums">{r.totalPoint}</span>
+        {r.uncountedEstimateTask > 0 && <EstimateMissingBadge count={r.uncountedEstimateTask} />}
+      </span>
+    ),
+  },
+];
 
 export default function ReportsClient({ initialProjects }: { initialProjects: ProjectOption[] }) {
   const thisMonth = useMemo(() => monthRange(0), []);
@@ -91,125 +129,84 @@ export default function ReportsClient({ initialProjects }: { initialProjects: Pr
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Report Builder</h1>
-        <p className="text-sm text-neutral-500">Buat laporan, preview, lalu export ke PDF atau teks siap salin.</p>
-      </div>
+    <PageShell>
+      <PageHeader title="Report Builder" description="Buat laporan, preview, lalu export ke PDF atau teks siap salin." />
 
-      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-neutral-200 bg-white p-4">
-        <label className="flex flex-col text-sm">
-          Jenis Laporan
-          <select value={type} onChange={(e) => setType(e.target.value as ReportType)} className="rounded border border-neutral-300 px-2 py-1">
+      <FilterBar>
+        <Field label="Jenis Laporan">
+          <Select value={type} onChange={(e) => setType(e.target.value as ReportType)}>
             <option value="monthly_point">Rekap Point Bulanan</option>
             <option value="project">Progress Project</option>
-          </select>
-        </label>
-        <label className="flex flex-col text-sm">
-          Project {type === "monthly_point" && <span className="text-neutral-400">(opsional)</span>}
-          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="rounded border border-neutral-300 px-2 py-1">
+          </Select>
+        </Field>
+        <Field label={type === "monthly_point" ? "Project (opsional)" : "Project"}>
+          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)}>
             <option value="">{type === "project" ? "Pilih project..." : "Semua Project"}</option>
             {initialProjects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="flex flex-col text-sm">
-          Dari
-          <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
-        </label>
-        <label className="flex flex-col text-sm">
-          Sampai
-          <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
-        </label>
+          </Select>
+        </Field>
+        <Field label="Dari">
+          <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+        </Field>
+        <Field label="Sampai">
+          <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+        </Field>
         {type === "monthly_point" && (
-          <label className="flex flex-col text-sm">
-            Basis Tanggal
-            <select value={dateBasis} onChange={(e) => setDateBasis(e.target.value as "created" | "completed")} className="rounded border border-neutral-300 px-2 py-1">
+          <Field label="Basis Tanggal">
+            <Select value={dateBasis} onChange={(e) => setDateBasis(e.target.value as "created" | "completed")}>
               <option value="created">Created Date</option>
               <option value="completed">Completed Date</option>
-            </select>
-          </label>
+            </Select>
+          </Field>
         )}
-        <button onClick={generate} disabled={loading} className="rounded bg-neutral-900 px-4 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-50">
-          {loading ? "Memuat..." : "Preview"}
-        </button>
-      </div>
+        <Button variant="primary" onClick={generate} loading={loading}>
+          Preview
+        </Button>
+      </FilterBar>
 
       {error && <ConfigNotice message={error} />}
 
       {report && (
-        <div className="space-y-4 rounded-lg border border-neutral-200 bg-white p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              {report.type === "project" ? `Progress Project — ${report.projectName}` : `Rekap Point — ${report.scopeName}`}
-            </h2>
-            <div className="flex gap-2">
-              <a href={`/api/reports/export/txt?${exportParams()}`} className="rounded border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-100">
-                Export TXT
-              </a>
-              <a href={`/api/reports/export/pdf?${exportParams()}`} className="rounded border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-100">
-                Export PDF
-              </a>
-            </div>
-          </div>
-          <p className="text-sm text-neutral-500">
-            Periode: {report.period.start} s/d {report.period.end}
-            {report.type === "monthly_point" && ` (${report.dateBasis === "completed" ? "Completed Date" : "Created Date"})`}
-          </p>
-
-          {report.type === "project" ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 text-sm">
-              <div>Task Progress: <b>{report.progress.taskProgressPct}%</b></div>
-              <div>Estimate Progress: <b>{report.progress.estimateProgressPct}%</b></div>
-              <div>Done: <b>{report.progress.completedTask}</b></div>
-              <div>In Progress: <b>{report.progress.inProgressTask}</b></div>
-              <div>Backlog: <b>{report.progress.backlogTask}</b></div>
-              <div>Overdue: <b>{report.progress.overdueTask}</b></div>
-              <div>Total Estimate: <b>{report.progress.totalEstimate}</b></div>
-              <div>Completed Estimate: <b>{report.progress.completedEstimate}</b></div>
-              {report.progress.uncountedEstimateTask > 0 && (
-                <div className="col-span-2 sm:col-span-4 text-xs text-amber-600">
-                  {report.progress.uncountedEstimateTask} task pakai estimate kategori (bukan angka) yang tidak bisa dikonversi lewat Plane API — tidak masuk hitungan estimate di atas.
-                </div>
-              )}
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-neutral-500">
-                <tr>
-                  <th className="py-1">Anggota</th>
-                  <th className="py-1">Done Task</th>
-                  <th className="py-1">Total Point</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.rows.map((r) => (
-                  <tr key={r.memberId} className="border-t border-neutral-100">
-                    <td className="py-1">{r.memberName}</td>
-                    <td className="py-1">{r.doneTask}</td>
-                    <td className="py-1">
-                      {r.totalPoint}
-                      {r.uncountedEstimateTask > 0 && (
-                        <span className="ml-2 text-xs text-amber-600">+{r.uncountedEstimateTask} tidak terhitung</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {report.rows.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="py-2 text-neutral-400">
-                      Tidak ada data pada periode ini.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <Card>
+          <CardHeader
+            title={report.type === "project" ? `Progress Project — ${report.projectName}` : `Rekap Point — ${report.scopeName}`}
+            description={`Periode: ${report.period.start} s/d ${report.period.end}${report.type === "monthly_point" ? ` (${report.dateBasis === "completed" ? "Completed Date" : "Created Date"})` : ""}`}
+            actions={
+              <>
+                <Button variant="secondary" size="sm" href={`/api/reports/export/txt?${exportParams()}`} download leftIcon={<FileText className="size-4" />}>
+                  Export TXT
+                </Button>
+                <Button variant="secondary" size="sm" href={`/api/reports/export/pdf?${exportParams()}`} download leftIcon={<Download className="size-4" />}>
+                  Export PDF
+                </Button>
+              </>
+            }
+          />
+          <CardBody>
+            {report.type === "project" ? (
+              <div className="flex flex-col gap-3">
+                <StatGrid>
+                  <StatCard label="Task Progress" value={`${report.progress.taskProgressPct}%`} />
+                  <StatCard label="Estimate Progress" value={`${report.progress.estimateProgressPct}%`} />
+                  <StatCard label="Done" value={report.progress.completedTask} />
+                  <StatCard label="In Progress" value={report.progress.inProgressTask} />
+                  <StatCard label="Backlog" value={report.progress.backlogTask} />
+                  <StatCard label="Overdue" value={report.progress.overdueTask} tone={report.progress.overdueTask > 0 ? "danger" : "default"} />
+                  <StatCard label="Total Estimate" value={report.progress.totalEstimate} />
+                  <StatCard label="Completed Estimate" value={report.progress.completedEstimate} />
+                </StatGrid>
+                {report.progress.uncountedEstimateTask > 0 && <EstimateMissingBadge count={report.progress.uncountedEstimateTask} />}
+              </div>
+            ) : (
+              <DataTable<MonthlyPointRow> columns={monthlyPointColumns} rows={report.rows} getRowKey={(r) => r.memberId} caption="Rekap point anggota tim" />
+            )}
+          </CardBody>
+        </Card>
       )}
-    </div>
+    </PageShell>
   );
 }

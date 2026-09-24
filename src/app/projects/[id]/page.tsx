@@ -1,116 +1,97 @@
+import Link from "next/link";
 import ConfigNotice from "@/components/ConfigNotice";
-import StatCard from "@/components/StatCard";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatGrid } from "@/components/ui/StatGrid";
+import { StatCard } from "@/components/ui/StatCard";
+import { Section } from "@/components/ui/Section";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { Notice } from "@/components/ui/Notice";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { EstimateMissingBadge } from "@/components/ui/Badge";
 import { getProjectDetailData } from "@/lib/db-queries";
+
+type ProjectDetailData = Awaited<ReturnType<typeof getProjectDetailData>>;
+type CycleRow = ProjectDetailData["cycles"][number];
+type ModuleRow = ProjectDetailData["modules"][number];
+
+const progressColumns = <T extends { id: string; name: string; taskProgressPct: number; completed_issues: number; total_issues: number }>(): Column<T>[] => [
+  { key: "name", header: "Nama", cell: (row) => row.name, mobile: "title" },
+  { key: "progress", header: "Progress", cell: (row) => `${row.taskProgressPct}%`, align: "right", mobile: "field" },
+  { key: "doneTotal", header: "Done / Total", cell: (row) => `${row.completed_issues} / ${row.total_issues}`, align: "right", mobile: "field" },
+];
 
 // Server Component: fetched straight from Postgres at render time.
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  let data: Awaited<ReturnType<typeof getProjectDetailData>>;
+  let data: ProjectDetailData;
   try {
     data = await getProjectDetailData(id);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Gagal memuat data";
-    return <ConfigNotice message={message} />;
+    return (
+      <PageShell>
+        <ConfigNotice message={message} />
+      </PageShell>
+    );
   }
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-xl font-semibold">Detail Project</h1>
+    <PageShell>
+      <PageHeader
+        title="Detail Project"
+        breadcrumb={
+          <Link href="/" className="hover:text-fg">
+            ← Overview
+          </Link>
+        }
+      />
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        <StatCard label="Task Progress" value={`${data.progress.taskProgressPct}%`} sub={`${data.progress.completedTask}/${data.progress.totalTask} task`} />
-        <StatCard label="Estimate Progress" value={`${data.progress.estimateProgressPct}%`} sub={`${data.progress.completedEstimate}/${data.progress.totalEstimate} point`} />
+      <StatGrid>
+        <StatCard label="Task Progress" value={`${data.progress.taskProgressPct}%`} hint={`${data.progress.completedTask}/${data.progress.totalTask} task`} />
+        <StatCard
+          label="Estimate Progress"
+          value={`${data.progress.estimateProgressPct}%`}
+          hint={`${data.progress.completedEstimate}/${data.progress.totalEstimate} point`}
+        />
         <StatCard label="In Progress" value={data.progress.inProgressTask} />
         <StatCard label="Backlog" value={data.progress.backlogTask} />
-        <StatCard label="Overdue" value={data.progress.overdueTask} />
+        <StatCard label="Overdue" value={data.progress.overdueTask} tone={data.progress.overdueTask > 0 ? "danger" : "default"} />
         <StatCard label="Member" value={data.members.length} />
-      </div>
+      </StatGrid>
 
-      {data.progress.uncountedEstimateTask > 0 && (
-        <p className="text-xs text-amber-600">
-          {data.progress.uncountedEstimateTask} task pakai estimate kategori (bukan angka) yang tidak bisa dikonversi lewat Plane API — tidak masuk hitungan Estimate Progress di atas.
-        </p>
-      )}
+      {data.progress.uncountedEstimateTask > 0 && <EstimateMissingBadge count={data.progress.uncountedEstimateTask} />}
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-neutral-600">Cycle</h2>
-        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
-              <tr>
-                <th className="px-4 py-2">Nama</th>
-                <th className="px-4 py-2">Progress</th>
-                <th className="px-4 py-2">Done / Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.cycles.map((c) => (
-                <tr key={c.id} className="border-t border-neutral-100">
-                  <td className="px-4 py-2">{c.name}</td>
-                  <td className="px-4 py-2">{c.taskProgressPct}%</td>
-                  <td className="px-4 py-2">
-                    {c.completed_issues} / {c.total_issues}
-                  </td>
-                </tr>
-              ))}
-              {data.cycles.length === 0 && (
-                <tr>
-                  <td className="px-4 py-3 text-neutral-400" colSpan={3}>
-                    Belum ada cycle.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <Section title="Cycle">
+        <DataTable<CycleRow>
+          columns={progressColumns<CycleRow>()}
+          rows={data.cycles}
+          getRowKey={(row) => row.id}
+          empty={<EmptyState title="Belum ada cycle." />}
+        />
+      </Section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-neutral-600">Module</h2>
-        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
-              <tr>
-                <th className="px-4 py-2">Nama</th>
-                <th className="px-4 py-2">Progress</th>
-                <th className="px-4 py-2">Done / Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.modules.map((m) => (
-                <tr key={m.id} className="border-t border-neutral-100">
-                  <td className="px-4 py-2">{m.name}</td>
-                  <td className="px-4 py-2">{m.taskProgressPct}%</td>
-                  <td className="px-4 py-2">
-                    {m.completed_issues} / {m.total_issues}
-                  </td>
-                </tr>
-              ))}
-              {data.modules.length === 0 && (
-                <tr>
-                  <td className="px-4 py-3 text-neutral-400" colSpan={3}>
-                    Belum ada module.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <Section title="Module">
+        <DataTable<ModuleRow>
+          columns={progressColumns<ModuleRow>()}
+          rows={data.modules}
+          getRowKey={(row) => row.id}
+          empty={<EmptyState title="Belum ada module." />}
+        />
+      </Section>
 
       {data.overdueItems.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-red-600">Task Overdue</h2>
-          <ul className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm space-y-1">
+        <Notice tone="danger" title="Task Overdue">
+          <ul className="flex flex-col gap-1">
             {data.overdueItems.map((item) => (
               <li key={item.id}>
-                {item.name} <span className="text-neutral-500">— due {item.target_date}</span>
+                {item.name} <span className="text-fg-subtle">— due {item.target_date}</span>
               </li>
             ))}
           </ul>
-        </section>
+        </Notice>
       )}
-    </div>
+    </PageShell>
   );
 }

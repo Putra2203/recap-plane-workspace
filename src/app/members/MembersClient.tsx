@@ -1,9 +1,28 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import ConfigNotice from "@/components/ConfigNotice";
 import { fetcher } from "@/lib/swr-fetcher";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { DataTable, type Column } from "@/components/ui/DataTable";
+import { Dialog } from "@/components/ui/Dialog";
+import { EstimateMissingBadge } from "@/components/ui/Badge";
+import { KeyValue } from "@/components/ui/KeyValue";
+
+interface MemberTask {
+  id: string;
+  name: string;
+  point: number;
+  hasUncountedEstimate: boolean;
+  completedAt: string | null;
+}
 
 interface MemberRow {
   memberId: string;
@@ -11,7 +30,7 @@ interface MemberRow {
   doneTask: number;
   totalPoint: number;
   uncountedEstimateTask: number;
-  tasks: { id: string; name: string; point: number; hasUncountedEstimate: boolean; completedAt: string | null }[];
+  tasks: MemberTask[];
 }
 
 interface ProjectOption {
@@ -50,7 +69,7 @@ export default function MembersClient({
   const [projectId, setProjectId] = useState<string>("");
   const [cycleId, setCycleId] = useState<string>("");
   const [moduleId, setModuleId] = useState<string>("");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedMember, setSelectedMember] = useState<MemberRow | null>(null);
 
   const recapUrl = useMemo(() => {
     const params = new URLSearchParams({ periodStart, periodEnd, dateBasis });
@@ -90,148 +109,126 @@ export default function MembersClient({
     setModuleId("");
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Rekap Point Anggota Tim</h1>
-        <p className="text-sm text-neutral-500">
-          Dihitung dari task berstatus <b>Done</b> berdasarkan{" "}
-          <b>{dateBasis === "completed" ? "tanggal task selesai (Completed Date)" : "tanggal task dibuat (Created Date)"}</b> pada periode yang dipilih.
-        </p>
-      </div>
+  const columns: Column<MemberRow>[] = [
+    { key: "member", header: "Anggota", mobile: "title", cell: (row) => row.memberName },
+    { key: "doneTask", header: "Done Task", align: "right", mobile: "field", cell: (row) => row.doneTask },
+    {
+      key: "totalPoint",
+      header: "Total Point",
+      align: "right",
+      mobile: "field",
+      cell: (row) => (
+        <span className="inline-flex items-center gap-2">
+          <span className="tabular-nums">{row.totalPoint}</span>
+          {row.uncountedEstimateTask > 0 && <EstimateMissingBadge count={row.uncountedEstimateTask} />}
+        </span>
+      ),
+    },
+  ];
 
-      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-neutral-200 bg-white p-4">
-        <div className="flex gap-2 text-sm">
-          <button onClick={() => applyPreset(0)} className="rounded border border-neutral-300 px-3 py-1 hover:bg-neutral-100">
-            Bulan ini
-          </button>
-          <button onClick={() => applyPreset(-1)} className="rounded border border-neutral-300 px-3 py-1 hover:bg-neutral-100">
-            Bulan lalu
-          </button>
-        </div>
-        <label className="flex flex-col text-sm">
-          Dari
-          <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
-        </label>
-        <label className="flex flex-col text-sm">
-          Sampai
-          <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="rounded border border-neutral-300 px-2 py-1" />
-        </label>
-        <label className="flex flex-col text-sm">
-          Basis Tanggal
-          <select value={dateBasis} onChange={(e) => setDateBasis(e.target.value as "created" | "completed")} className="rounded border border-neutral-300 px-2 py-1">
+  return (
+    <PageShell>
+      <PageHeader
+        title="Rekap Point Anggota Tim"
+        description={
+          <>
+            Dihitung dari task berstatus <b>Done</b> berdasarkan{" "}
+            <b>{dateBasis === "completed" ? "tanggal task selesai (Completed Date)" : "tanggal task dibuat (Created Date)"}</b> pada periode yang
+            dipilih.
+          </>
+        }
+      />
+
+      <FilterBar>
+        <Field label="Preset">
+          <div className="flex h-9 gap-2 sm:h-8">
+            <Button variant="secondary" size="sm" onClick={() => applyPreset(0)}>
+              Bulan ini
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => applyPreset(-1)}>
+              Bulan lalu
+            </Button>
+          </div>
+        </Field>
+        <Field label="Dari">
+          <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+        </Field>
+        <Field label="Sampai">
+          <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+        </Field>
+        <Field label="Basis Tanggal">
+          <Select value={dateBasis} onChange={(e) => setDateBasis(e.target.value as "created" | "completed")}>
             <option value="created">Created Date</option>
             <option value="completed">Completed Date</option>
-          </select>
-        </label>
-        <label className="flex flex-col text-sm">
-          Project
-          <select value={projectId} onChange={(e) => handleProjectChange(e.target.value)} className="rounded border border-neutral-300 px-2 py-1">
+          </Select>
+        </Field>
+        <Field label="Project">
+          <Select value={projectId} onChange={(e) => handleProjectChange(e.target.value)}>
             <option value="">Semua Project</option>
             {initialProjects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="flex flex-col text-sm">
-          Cycle
-          <select
-            value={cycleId}
-            onChange={(e) => setCycleId(e.target.value)}
-            disabled={!projectId || cycles.length === 0}
-            className="rounded border border-neutral-300 px-2 py-1 disabled:bg-neutral-100 disabled:text-neutral-400"
-          >
+          </Select>
+        </Field>
+        <Field label="Cycle">
+          <Select value={cycleId} onChange={(e) => setCycleId(e.target.value)} disabled={!projectId || cycles.length === 0}>
             <option value="">Semua Cycle</option>
             {cycles.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="flex flex-col text-sm">
-          Module
-          <select
-            value={moduleId}
-            onChange={(e) => setModuleId(e.target.value)}
-            disabled={!projectId || modules.length === 0}
-            className="rounded border border-neutral-300 px-2 py-1 disabled:bg-neutral-100 disabled:text-neutral-400"
-          >
+          </Select>
+        </Field>
+        <Field label="Module">
+          <Select value={moduleId} onChange={(e) => setModuleId(e.target.value)} disabled={!projectId || modules.length === 0}>
             <option value="">Semua Module</option>
             {modules.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
               </option>
             ))}
-          </select>
-        </label>
-      </div>
+          </Select>
+        </Field>
+      </FilterBar>
 
       {error && <ConfigNotice message={error.message} />}
-      {isLoading && <p className="text-sm text-neutral-500">Memuat...</p>}
 
       {!error && (
-        <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
-              <tr>
-                <th className="px-4 py-2">Anggota</th>
-                <th className="px-4 py-2">Done Task</th>
-                <th className="px-4 py-2">Total Point</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <Fragment key={row.memberId}>
-                  <tr className="border-t border-neutral-100">
-                    <td className="px-4 py-2 font-medium">{row.memberName}</td>
-                    <td className="px-4 py-2">{row.doneTask}</td>
-                    <td className="px-4 py-2">
-                      {row.totalPoint}
-                      {row.uncountedEstimateTask > 0 && (
-                        <span className="ml-2 text-xs text-amber-600" title="Task dengan estimate kategori (bukan angka) tidak ikut dijumlah — keterbatasan Plane API">
-                          +{row.uncountedEstimateTask} tidak terhitung
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <button
-                        onClick={() => setExpanded(expanded === row.memberId ? null : row.memberId)}
-                        className="text-xs text-neutral-500 hover:underline"
-                      >
-                        {expanded === row.memberId ? "Sembunyikan" : "Detail"}
-                      </button>
-                    </td>
-                  </tr>
-                  {expanded === row.memberId && (
-                    <tr className="border-t border-neutral-100 bg-neutral-50">
-                      <td colSpan={4} className="px-4 py-3">
-                        <ul className="space-y-1 text-xs text-neutral-600">
-                          {row.tasks.map((t) => (
-                            <li key={t.id}>
-                              {t.name} — {t.hasUncountedEstimate ? "estimate kategori (tidak terhitung)" : `${t.point} point`}
-                            </li>
-                          ))}
-                        </ul>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-              {!isLoading && rows.length === 0 && (
-                <tr>
-                  <td className="px-4 py-3 text-neutral-400" colSpan={4}>
-                    Tidak ada task Done pada periode ini.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<MemberRow>
+          columns={columns}
+          rows={rows}
+          getRowKey={(row) => row.memberId}
+          loading={isLoading}
+          onRowClick={(row) => setSelectedMember(row)}
+          caption="Rekap point per anggota tim"
+        />
       )}
-    </div>
+
+      <Dialog open={selectedMember !== null} onOpenChange={(open) => !open && setSelectedMember(null)} title={selectedMember?.memberName ?? ""}>
+        {selectedMember && (
+          <div className="flex flex-col gap-3">
+            <KeyValue
+              items={[
+                { key: "doneTask", label: "Done Task", value: selectedMember.doneTask },
+                { key: "totalPoint", label: "Total Point", value: selectedMember.totalPoint },
+              ]}
+            />
+            <ul className="flex flex-col gap-2 text-sm">
+              {selectedMember.tasks.map((t) => (
+                <li key={t.id} className="flex items-start justify-between gap-2 border-t border-line pt-2 first:border-t-0 first:pt-0">
+                  <span className="min-w-0 break-words">{t.name}</span>
+                  <span className="shrink-0 tabular-nums text-fg-subtle">
+                    {t.hasUncountedEstimate ? <EstimateMissingBadge /> : `${t.point} point`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Dialog>
+    </PageShell>
   );
 }
