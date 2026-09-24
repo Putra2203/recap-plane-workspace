@@ -32,7 +32,7 @@ function hasUncountedEstimate(item: PlaneWorkItem): boolean {
   return item.point == null && item.estimate_point != null;
 }
 
-function pct(numerator: number, denominator: number): number {
+export function pct(numerator: number, denominator: number): number {
   if (denominator <= 0) return 0;
   return Math.round((numerator / denominator) * 1000) / 10; // one decimal
 }

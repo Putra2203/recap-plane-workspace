@@ -1,45 +1,18 @@
-"use client";
-
-import { use, useEffect, useState } from "react";
 import ConfigNotice from "@/components/ConfigNotice";
 import StatCard from "@/components/StatCard";
+import { getProjectDetailData } from "@/lib/db-queries";
 
-interface ProjectDetail {
-  progress: {
-    totalTask: number;
-    completedTask: number;
-    inProgressTask: number;
-    backlogTask: number;
-    totalEstimate: number;
-    completedEstimate: number;
-    taskProgressPct: number;
-    estimateProgressPct: number;
-    overdueTask: number;
-    uncountedEstimateTask: number;
-  };
-  cycles: { id: string; name: string; total_issues: number; completed_issues: number; taskProgressPct: number }[];
-  modules: { id: string; name: string; total_issues: number; completed_issues: number; taskProgressPct: number }[];
-  members: { id: string; display_name: string }[];
-  overdueItems: { id: string; name: string; target_date: string }[];
-}
+// Server Component: fetched straight from Postgres at render time.
+export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
 
-export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const [data, setData] = useState<ProjectDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch(`/api/projects/${id}`)
-      .then(async (res) => {
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? "Gagal memuat data");
-        setData(body);
-      })
-      .catch((err) => setError(err.message));
-  }, [id]);
-
-  if (error) return <ConfigNotice message={error} />;
-  if (!data) return <p className="text-neutral-500">Memuat...</p>;
+  let data: Awaited<ReturnType<typeof getProjectDetailData>>;
+  try {
+    data = await getProjectDetailData(id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal memuat data";
+    return <ConfigNotice message={message} />;
+  }
 
   return (
     <div className="space-y-8">

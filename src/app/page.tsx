@@ -1,57 +1,29 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import ConfigNotice from "@/components/ConfigNotice";
 import StatCard from "@/components/StatCard";
+import { getOverviewData } from "@/lib/db-queries";
 
-interface ProjectSummary {
-  id: string;
-  name: string;
-  identifier: string;
-  memberCount: number;
-  activeCycleName: string | null;
-  totalTask: number;
-  completedTask: number;
-  inProgressTask: number;
-  backlogTask: number;
-  totalEstimate: number;
-  completedEstimate: number;
-  taskProgressPct: number;
-  estimateProgressPct: number;
-  overdueTask: number;
-}
+// Server Component: data is fetched straight from Postgres during render on
+// the server, so the HTML sent to the browser already has the table filled
+// in — no client-side loading spinner, no fetch round-trip to our own API.
+//
+// force-dynamic is required: Next.js only auto-detects "this page needs
+// fresh data per request" from fetch() calls, not from a Prisma query. Data
+// here changes via the "Sync Now" action, not a rebuild — without this, a
+// production build (`next build && next start`) would prerender this page
+// ONCE at build time and serve that frozen snapshot to every visitor
+// forever. Confirmed the risk was real: `next build`'s route table marked
+// this page "○ Static" before this was added.
+export const dynamic = "force-dynamic";
 
-interface OverviewResponse {
-  projects: ProjectSummary[];
-  totals: {
-    totalTask: number;
-    completedTask: number;
-    totalEstimate: number;
-    completedEstimate: number;
-    overdueTask: number;
-  };
-}
-
-export default function OverviewPage() {
-  const [data, setData] = useState<OverviewResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/overview")
-      .then(async (res) => {
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? "Gagal memuat data");
-        setData(body);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <p className="text-neutral-500">Memuat data...</p>;
-  if (error) return <ConfigNotice message={error} />;
-  if (!data) return null;
+export default async function OverviewPage() {
+  let data: Awaited<ReturnType<typeof getOverviewData>>;
+  try {
+    data = await getOverviewData();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal memuat data";
+    return <ConfigNotice message={message} />;
+  }
 
   if (data.projects.length === 0) {
     return (

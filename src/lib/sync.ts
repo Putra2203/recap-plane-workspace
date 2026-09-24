@@ -59,6 +59,8 @@ function toWorkItemRow(
   itemModuleIds: Map<string, Set<string>>,
 ) {
   const parsedEstimateValue = item.estimate_point?.value ? Number(item.estimate_point.value) : NaN;
+  const estimatePointValue = Number.isFinite(parsedEstimateValue) ? parsedEstimateValue : null;
+  const point = item.point ?? null;
 
   return {
     id: item.id,
@@ -71,8 +73,9 @@ function toWorkItemRow(
     assignees: item.assignees,
     labels: item.labels,
     estimatePoint: item.estimate_point?.id ?? null,
-    estimatePointValue: Number.isFinite(parsedEstimateValue) ? parsedEstimateValue : null,
-    point: item.point ?? null,
+    estimatePointValue,
+    point,
+    effectivePoint: point ?? estimatePointValue,
     startDate: item.start_date ? new Date(item.start_date) : null,
     targetDate: item.target_date ? new Date(item.target_date) : null,
     createdAtPlane: new Date(item.created_at),

@@ -141,6 +141,10 @@ model WorkItem {
   // numeric (a text/category scale). See lib/sync.ts.
   estimatePointValue Float?
   point              Int?
+  // point ?? estimatePointValue, precomputed at sync time so aggregate
+  // queries (groupBy + _sum) can sum this directly instead of pulling every
+  // row into Node to merge the two fields in JS. See lib/db-queries.ts.
+  effectivePoint Float?
   startDate      DateTime?
   targetDate     DateTime?
   createdAtPlane DateTime
