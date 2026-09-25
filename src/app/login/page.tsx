@@ -46,7 +46,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-canvas px-4 py-12">
+    // min-h-dvh, not min-h-full: this div sits inside html > body > main,
+    // and min-h-full (min-height:100%) only centers correctly if every
+    // ancestor in that chain resolves a definite height through percentages
+    // — body/main do it via min-h-full + flex-1, which is exactly the kind
+    // of multi-level percentage chain that's fragile in practice (it broke
+    // here: the card rendered pinned to the top instead of centered). A
+    // viewport unit sidesteps ancestor height resolution entirely.
+    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-12">
       <div className="w-full max-w-sm">
         <Card>
           <CardHeader title="Plane Recap" description="Masukkan password tim untuk masuk." />
