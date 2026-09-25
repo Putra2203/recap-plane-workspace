@@ -199,3 +199,41 @@ body {
     transform: none;
   }
 }
+
+/* Page-route transitions — React's <ViewTransition> (PageShell.tsx), the
+   browser-native View Transitions API, not a JS animation library. Tried
+   Framer Motion's AnimatePresence first (genjutsu paint interaction thesis,
+   2026-09-26): it has a documented incompatibility with Next.js App Router
+   and reproduced a real "Router action dispatched before initialization"
+   error on this app's own dev server — reverted, not shipped. This achieves
+   the same validated thesis (quick fade-out, then a slower fade+rise-in,
+   Canopy's existing snappy curve) without fighting the router's lifecycle,
+   since the browser — not React — owns the animation.
+   Sequential timing matches globals.css's own motion-principles-derived
+   pattern (exit always more subtle/faster than enter). */
+::view-transition-old(.canopy-page) {
+  animation: 150ms ease-in both canopy-vt-out;
+}
+::view-transition-new(.canopy-page) {
+  animation: 220ms cubic-bezier(0.2, 0, 0, 1) 150ms both canopy-vt-in;
+}
+@keyframes canopy-vt-out {
+  to { opacity: 0; }
+}
+@keyframes canopy-vt-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Without this, the transition overlay captures pointer events for its
+   duration — a fast click right after navigating would be lost. */
+::view-transition {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(.canopy-page),
+  ::view-transition-new(.canopy-page),
+  ::view-transition-group(.canopy-page) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
