@@ -27,7 +27,7 @@ export default async function MembersPage() {
     getMemberRecapData({
       periodStart: new Date(period.start + "T00:00:00"),
       periodEnd: new Date(period.end + "T23:59:59.999"),
-      dateBasis: "created",
+      dateBasis: "completed",
     }),
   ]);
 

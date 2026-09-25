@@ -176,7 +176,7 @@ export default function MembersClient({
 }) {
   const [periodStart, setPeriodStart] = useState(initialPeriod.start);
   const [periodEnd, setPeriodEnd] = useState(initialPeriod.end);
-  const [dateBasis, setDateBasis] = useState<"created" | "completed">("created");
+  const [dateBasis, setDateBasis] = useState<"created" | "completed">("completed");
   const [projectId, setProjectId] = useState<string>("");
   const [cycleId, setCycleId] = useState<string>("");
   const [moduleId, setModuleId] = useState<string>("");
@@ -193,7 +193,7 @@ export default function MembersClient({
   }, [periodStart, periodEnd, dateBasis, projectId, cycleId, moduleId]);
 
   const isDefaultQuery =
-    periodStart === initialPeriod.start && periodEnd === initialPeriod.end && dateBasis === "created" && !projectId && !cycleId && !moduleId;
+    periodStart === initialPeriod.start && periodEnd === initialPeriod.end && dateBasis === "completed" && !projectId && !cycleId && !moduleId;
 
   const { data, error, isLoading } = useSWR<{ rows: MemberRow[] }>(recapUrl, fetcher, {
     fallbackData: isDefaultQuery ? { rows: initialRows } : undefined,
@@ -271,8 +271,8 @@ export default function MembersClient({
         </Field>
         <Field label="Basis Tanggal">
           <Select value={dateBasis} onChange={(e) => setDateBasis(e.target.value as "created" | "completed")}>
-            <option value="created">Created Date</option>
             <option value="completed">Completed Date</option>
+            <option value="created">Created Date</option>
           </Select>
         </Field>
         <Field label="Project">
