@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { planeClient, type PlaneState, type PlaneWorkItem } from "./plane";
 import { prisma } from "./prisma";
 
@@ -240,11 +241,21 @@ async function performSync(runId: string): Promise<void> {
  * letting the request finish. Returning fast sidesteps that regardless of
  * the proxy's timeout setting.
  *
- * Relies on this running as a long-lived Node process (`next start` behind
- * a reverse proxy, which is how this app is deployed) — fire-and-forget
- * background work like this would NOT reliably continue on a serverless
- * platform (e.g. Vercel) that freezes the function after the response is
- * sent, unless using that platform's own waitUntil()-style API.
+ * Uses Next's after() so the background work survives on a serverless
+ * platform (Vercel) too: after() is Next's own portable wrapper around
+ * waitUntil() — on Vercel it keeps the function instance alive until the
+ * callback finishes instead of freezing it right after the response is
+ * sent; on a long-lived Node process (`next start` behind a reverse proxy,
+ * this app's other deployment target) it behaves the same as the bare
+ * fire-and-forget call this used to be. Either way, nothing awaits it here
+ * on the request path — the client polls SyncRun via GET /api/sync/status.
+ *
+ * after() only works inside an active request (it throws synchronously
+ * otherwise), so it can't be used unconditionally — auto-sync.ts calls this
+ * from a bare setInterval, with no request in flight. Falls back to the
+ * original bare fire-and-forget call there; that path only ever runs on a
+ * long-lived self-hosted process anyway (auto-sync.ts skips itself entirely
+ * on Vercel), where the bare pattern was always safe.
  */
 export async function startSync(): Promise<{ syncRunId: string; alreadyRunning: boolean }> {
   const inProgress = await prisma.syncRun.findFirst({ where: { status: "running" }, orderBy: { startedAt: "desc" } });
@@ -253,7 +264,12 @@ export async function startSync(): Promise<{ syncRunId: string; alreadyRunning: 
   }
 
   const run = await prisma.syncRun.create({ data: { status: "running" } });
-  performSync(run.id).catch((err) => console.error(`[sync] run ${run.id} threw unexpectedly:`, err));
+  const runInBackground = () => performSync(run.id).catch((err) => console.error(`[sync] run ${run.id} threw unexpectedly:`, err));
+  try {
+    after(runInBackground);
+  } catch {
+    runInBackground();
+  }
   return { syncRunId: run.id, alreadyRunning: false };
 }
 
