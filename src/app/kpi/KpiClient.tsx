@@ -220,7 +220,7 @@ export default function KpiClient({ initialProjects, initialMembers }: { initial
                   ))}
                 </Select>
               </Field>
-              <Field label="Scope" hint="Kosongkan untuk lintas-project">
+              <Field label="Scope">
                 <Select value={formProjectId} onChange={(e) => setFormProjectId(e.target.value)}>
                   <option value="">Semua Project</option>
                   {initialProjects.map((p) => (
@@ -236,7 +236,7 @@ export default function KpiClient({ initialProjects, initialMembers }: { initial
               <Field label="Target Task">
                 <Input type="number" min={0} placeholder="opsional" value={targetTask} onChange={(e) => setTargetTask(e.target.value)} />
               </Field>
-              <Field label="Bobot Point (%)" hint="Sisanya jadi bobot task">
+              <Field label="Bobot Point (%)">
                 <Input type="number" min={0} max={100} value={weightCompletion} onChange={(e) => setWeightCompletion(e.target.value)} />
               </Field>
             </div>
@@ -244,6 +244,15 @@ export default function KpiClient({ initialProjects, initialMembers }: { initial
               Simpan Target
             </Button>
           </div>
+          {/* One shared note instead of a per-field hint: a hint under only
+              some Fields gives those Fields extra height, and sm:items-end
+              then bottom-aligns the row on that uneven height — the input
+              boxes themselves end up at different y-positions instead of
+              lining up. */}
+          <p className="text-xs text-fg-subtle">
+            Scope kosong = target berlaku lintas-project (dijumlah dari semua project anggota ini). Bobot Point menentukan porsi Target
+            Point vs Target Task dalam Skor KPI saat keduanya diisi.
+          </p>
 
           {formError && <Notice tone="danger" title="Gagal menyimpan">{formError}</Notice>}
 
