@@ -21,6 +21,11 @@ export function AppHeader({
 }) {
   const pathname = usePathname();
 
+  // /login is reachable without a session (see proxy.ts) and shouldn't show
+  // nav links to protected pages or the Sync Now / Logout actions before
+  // someone's actually logged in.
+  if (pathname === "/login") return null;
+
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-surface">
       <div className="mx-auto flex h-12 w-full max-w-screen-xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">

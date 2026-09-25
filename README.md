@@ -35,6 +35,9 @@ purely the recap layer on top.
 | **KPI** | Configure a target (point, task, or both, with a completion weight) per member and period — a score only ever appears once a target exists. |
 | **Sync** | A manual "Sync Now" button, plus an optional scheduled sync (self-hosted interval or a Vercel Cron Job) so recap data stays fresh without anyone remembering to click it. |
 
+Gated behind a single shared team password (`/login`, `src/proxy.ts`) — no per-user accounts,
+just enough to keep the workspace's recap and KPI data off the open internet.
+
 ## Design system — Canopy
 
 <img align="right" width="160" alt="" src="https://placehold.co/160x120/FFF8EC/0E6B2C.png?text=Canopy&font=roboto">
@@ -87,6 +90,7 @@ Required environment variables (see `.env.example` for details):
 
 | Variable | Purpose |
 |---|---|
+| `APP_PASSWORD` | Shared team password — required, gates the whole app |
 | `PLANE_API_TOKEN` | Plane API token (workspace Settings → API Tokens) |
 | `PLANE_WORKSPACE_SLUG` | Your Plane workspace slug |
 | `PLANE_API_BASE_URL` | `https://api.plane.so` (Cloud) or your self-hosted Plane URL |
@@ -106,6 +110,7 @@ guaranteed to stay alive long enough for one; see the comments in `src/lib/auto-
 
 <div align="center">
 
-Built for a single Plane.so workspace — no multi-tenant support, no auth layer, by design.
+Built for a single Plane.so workspace — no multi-tenant support, one shared password for the
+whole team, by design.
 
 </div>

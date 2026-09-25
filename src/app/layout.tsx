@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fredoka, Nunito_Sans } from "next/font/google";
 import { AppHeader } from "@/components/ui/AppHeader";
 import SyncStatus from "@/components/SyncStatus";
+import LogoutButton from "@/components/LogoutButton";
 import "./globals.css";
 
 // Fredoka: chunky rounded display face — headings, buttons, nav, badges.
@@ -39,7 +40,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="id" className={`${fredoka.variable} ${nunitoSans.variable} h-full`}>
       <body className="flex min-h-full flex-col bg-canvas font-sans text-fg antialiased">
-        <AppHeader appName="Plane Recap" navItems={NAV_ITEMS} actions={<SyncStatus />} />
+        <AppHeader
+          appName="Plane Recap"
+          navItems={NAV_ITEMS}
+          actions={
+            <div className="flex items-center gap-1">
+              <SyncStatus />
+              <LogoutButton />
+            </div>
+          }
+        />
         <main className="flex-1">{children}</main>
       </body>
     </html>
