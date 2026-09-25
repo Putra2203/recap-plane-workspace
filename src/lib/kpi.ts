@@ -49,10 +49,18 @@ export async function computeKpiRows(period: string, viewProjectId?: string): Pr
 
   const allActualRows = await computeSnapshotRows(period);
   const actualByProjectMember = new Map(allActualRows.map((r) => [`${r.projectId}:${r.memberId}`, r]));
-  const projectNameById = new Map(allActualRows.map((r) => [r.projectId, r.projectName]));
 
   const members = await prisma.member.findMany({ where: { id: { in: [...new Set(targets.map((t) => t.memberId))] } } });
   const memberNameById = new Map(members.map((m) => [m.id, m.displayName]));
+
+  // Not sourced from allActualRows: that only contains (project, member)
+  // pairs with at least one completed task that period, so a target for a
+  // member with zero completed work in a real project — the exact
+  // underperformer case KPI exists to surface — would resolve to "Unknown
+  // project" even though the project exists. Resolve names directly instead.
+  const targetProjectIds = [...new Set(targets.map((t) => t.projectId).filter(Boolean))];
+  const projects = await prisma.project.findMany({ where: { id: { in: targetProjectIds } }, select: { id: true, name: true } });
+  const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
 
   return targets
     .map((target) => {

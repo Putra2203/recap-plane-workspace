@@ -83,10 +83,19 @@ export default function SnapshotsClient({ initialProjects }: { initialProjects: 
     return `/api/snapshots?${params.toString()}`;
   }, [period, projectId]);
 
+  // keepPreviousData on both: without it, changing Period/Project makes both
+  // queries return undefined for a moment, so previewProjectIds/
+  // lockedProjectIds below both empty out and `fullyLocked` goes false —
+  // a real flash of "not locked yet" (Kunci button enabled, live-data copy)
+  // for a period that's actually already locked, until both resolve.
   const { data: previewData, isLoading: previewLoading } = useSWR<{ rows: SnapshotRow[] }>(previewUrl, fetcher, {
     revalidateOnFocus: false,
+    keepPreviousData: true,
   });
-  const { data: lockedData, mutate: mutateLocked } = useSWR<{ rows: SnapshotRow[] }>(lockedUrl, fetcher, { revalidateOnFocus: false });
+  const { data: lockedData, mutate: mutateLocked } = useSWR<{ rows: SnapshotRow[] }>(lockedUrl, fetcher, {
+    revalidateOnFocus: false,
+    keepPreviousData: true,
+  });
   const { data: historyData, mutate: mutateHistory } = useSWR<{ periods: PeriodSummary[] }>("/api/snapshots", fetcher, {
     revalidateOnFocus: false,
   });
