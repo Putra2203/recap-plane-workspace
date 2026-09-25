@@ -37,13 +37,23 @@ export function Dialog({
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        {/* No tailwindcss-animate plugin here, so this stays a plain fade via
-            transition + Radix's data-state attribute rather than referencing
-            animate-in/slide-in-from-* utilities that wouldn't exist. */}
-        <RadixDialog.Overlay className="fixed inset-0 z-40 bg-fg/40 transition-opacity" />
+        {/* No tailwindcss-animate plugin here: enter uses the canopy-dialog-in
+            keyframe (globals.css) since a Radix mount has no "before" frame
+            for a transition to interpolate from; exit uses a plain CSS
+            transition to data-[state=closed]:opacity-0, which Radix keeps
+            the element mounted for until it finishes. */}
+        <RadixDialog.Overlay
+          className={cn(
+            "fixed inset-0 z-40 bg-fg/40 transition-opacity duration-200",
+            "data-[state=open]:animate-[canopy-dialog-in_200ms_ease-out]",
+            "data-[state=closed]:opacity-0",
+          )}
+        />
         <RadixDialog.Content
           className={cn(
-            "fixed z-50 flex flex-col bg-surface outline-none transition-transform",
+            "fixed z-50 flex flex-col bg-surface outline-none transition-opacity duration-200",
+            "data-[state=open]:animate-[canopy-dialog-in_200ms_ease-out]",
+            "data-[state=closed]:opacity-0",
             // Mobile: bottom sheet — width and height stay identical
             // regardless of `size`, since a phone screen has no room to
             // grow into; only the desktop breakpoint below varies by size.

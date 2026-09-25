@@ -139,3 +139,15 @@ body {
     transform: none;
   }
 }
+
+/* Dialog enter fade (Overlay + Content). A `transition-*` class alone never
+   animates a Radix Presence mount — the element renders already at its
+   final state on the frame it first appears, so there's no "before" frame
+   to interpolate from. An `animation` (this keyframe) has its own explicit
+   `from` state and plays regardless. Exit still uses a plain CSS transition
+   in Dialog.tsx: closing IS a real two-frame state change (data-state
+   open -> closed) that Radix keeps mounted for until it finishes. */
+@keyframes canopy-dialog-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
