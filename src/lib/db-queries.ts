@@ -244,7 +244,7 @@ export async function getOverviewData() {
 }
 
 export async function getProjectDetailData(projectId: string) {
-  const [statsByProject, cycles, modules, projectMembers, overdueItems] = await Promise.all([
+  const [statsByProject, cycles, modules, projectMembers, overdueItems, labels] = await Promise.all([
     aggregateProgressByProject(projectId),
     prisma.cycle.findMany({ where: { projectId } }),
     prisma.module.findMany({ where: { projectId } }),
@@ -253,6 +253,7 @@ export async function getProjectDetailData(projectId: string) {
       where: { projectId, stateGroup: { notIn: ["completed", "cancelled"] }, targetDate: { lt: new Date() } },
       select: { id: true, name: true, targetDate: true },
     }),
+    prisma.label.findMany({ where: { projectId }, orderBy: { name: "asc" }, select: { id: true, name: true, color: true } }),
   ]);
   const members = await prisma.member.findMany({ where: { id: { in: projectMembers.map((pm) => pm.memberId) } } });
 
@@ -279,6 +280,7 @@ export async function getProjectDetailData(projectId: string) {
     ),
     members: members.map((m) => ({ id: m.id, display_name: m.displayName })),
     overdueItems: overdueItems.map((i) => ({ id: i.id, name: i.name, target_date: toIsoDate(i.targetDate) })),
+    labels,
   };
 }
 
@@ -290,6 +292,7 @@ export interface DbRecapFilters {
   cycleId?: string;
   moduleId?: string;
   assigneeId?: string;
+  labelId?: string;
 }
 
 export async function getMemberRecapData(filters: DbRecapFilters): Promise<MemberRecapRow[]> {
@@ -311,6 +314,20 @@ export async function getMemberRecapData(filters: DbRecapFilters): Promise<Membe
   const statesById = statesByIdFromItems(items);
   const { itemCycleId, itemModuleIds } = membershipFromItems(items);
 
+  // A separate targeted query, not a `labels` select added to RECAP_SELECT
+  // above — see RECAP_SELECT's comment on why that column is excluded.
+  // Selecting only `id` under a `labels: { has }` WHERE avoids the slowdown
+  // that was specific to returning the array column itself (measured
+  // ~200ms for this vs. the ~9s that selecting `labels` for every row cost).
+  let labelItemIds: Set<string> | undefined;
+  if (filters.labelId) {
+    const labeled = await prisma.workItem.findMany({
+      where: { ...(filters.projectId ? { projectId: filters.projectId } : {}), labels: { has: filters.labelId } },
+      select: { id: true },
+    });
+    labelItemIds = new Set(labeled.map((i) => i.id));
+  }
+
   const recapFilters: RecapFilters = {
     periodStart: filters.periodStart,
     periodEnd: filters.periodEnd,
@@ -320,6 +337,7 @@ export async function getMemberRecapData(filters: DbRecapFilters): Promise<Membe
     assigneeId: filters.assigneeId,
     itemCycleId,
     itemModuleIds,
+    labelItemIds,
   };
 
   return computeMemberRecap(items.map(rowToWorkItem), statesById, memberShapes, recapFilters);

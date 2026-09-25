@@ -126,6 +126,13 @@ export interface RecapFilters {
   // expose this as a field on the work item — see lib/db-queries.ts.
   itemCycleId?: Map<string, string>;
   itemModuleIds?: Map<string, Set<string>>;
+  // Set of work item IDs that carry the selected label — a membership test,
+  // not a full item->labels map like cycle/module above. `labels` isn't
+  // part of RECAP_SELECT (see db-queries.ts's RECAP_SELECT comment: a
+  // measured 9s+ slowdown selecting it for every row), so unlike cycle/
+  // module this can't be derived from the already-fetched items in memory —
+  // db-queries.ts runs a separate targeted query for just this filter.
+  labelItemIds?: Set<string>;
 }
 
 /**
@@ -150,6 +157,7 @@ export function computeMemberRecap(
     if (basisDate < filters.periodStart || basisDate > filters.periodEnd) continue;
     if (filters.cycleId && filters.itemCycleId?.get(item.id) !== filters.cycleId) continue;
     if (filters.moduleId && !filters.itemModuleIds?.get(item.id)?.has(filters.moduleId)) continue;
+    if (filters.labelItemIds && !filters.labelItemIds.has(item.id)) continue;
 
     for (const assigneeId of item.assignees) {
       if (filters.assigneeId && assigneeId !== filters.assigneeId) continue;

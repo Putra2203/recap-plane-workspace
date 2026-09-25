@@ -180,6 +180,7 @@ export default function MembersClient({
   const [projectId, setProjectId] = useState<string>("");
   const [cycleId, setCycleId] = useState<string>("");
   const [moduleId, setModuleId] = useState<string>("");
+  const [labelId, setLabelId] = useState<string>("");
   const [selectedMember, setSelectedMember] = useState<MemberRow | null>(null);
 
   const projectNames = useMemo(() => new Map(initialProjects.map((p) => [p.id, p.name])), [initialProjects]);
@@ -189,11 +190,18 @@ export default function MembersClient({
     if (projectId) params.set("projectId", projectId);
     if (cycleId) params.set("cycleId", cycleId);
     if (moduleId) params.set("moduleId", moduleId);
+    if (labelId) params.set("labelId", labelId);
     return `/api/members/recap?${params.toString()}`;
-  }, [periodStart, periodEnd, dateBasis, projectId, cycleId, moduleId]);
+  }, [periodStart, periodEnd, dateBasis, projectId, cycleId, moduleId, labelId]);
 
   const isDefaultQuery =
-    periodStart === initialPeriod.start && periodEnd === initialPeriod.end && dateBasis === "completed" && !projectId && !cycleId && !moduleId;
+    periodStart === initialPeriod.start &&
+    periodEnd === initialPeriod.end &&
+    dateBasis === "completed" &&
+    !projectId &&
+    !cycleId &&
+    !moduleId &&
+    !labelId;
 
   const { data, error, isLoading } = useSWR<{ rows: MemberRow[] }>(recapUrl, fetcher, {
     fallbackData: isDefaultQuery ? { rows: initialRows } : undefined,
@@ -204,10 +212,12 @@ export default function MembersClient({
   const { data: projectDetail } = useSWR<{
     cycles: { id: string; name: string }[];
     modules: { id: string; name: string }[];
+    labels: { id: string; name: string; color: string }[];
   }>(projectId ? `/api/projects/${projectId}` : null, fetcher, { revalidateOnFocus: false });
 
   const cycles: FilterOption[] = projectDetail?.cycles ?? [];
   const modules: FilterOption[] = projectDetail?.modules ?? [];
+  const labels: FilterOption[] = projectDetail?.labels ?? [];
   const rows = data?.rows ?? [];
 
   const applyPreset = (offset: number) => {
@@ -220,6 +230,7 @@ export default function MembersClient({
     setProjectId(value);
     setCycleId("");
     setModuleId("");
+    setLabelId("");
   };
 
   const columns: Column<MemberRow>[] = [
@@ -301,6 +312,16 @@ export default function MembersClient({
             {modules.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Label">
+          <Select value={labelId} onChange={(e) => setLabelId(e.target.value)} disabled={!projectId || labels.length === 0}>
+            <option value="">Semua Label</option>
+            {labels.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
               </option>
             ))}
           </Select>

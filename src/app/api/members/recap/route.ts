@@ -25,6 +25,7 @@ export async function GET(req: Request) {
       cycleId: searchParams.get("cycleId") ?? undefined,
       moduleId: searchParams.get("moduleId") ?? undefined,
       assigneeId: searchParams.get("assigneeId") ?? undefined,
+      labelId: searchParams.get("labelId") ?? undefined,
     });
     return NextResponse.json({ period: { start: searchParams.get("periodStart"), end: searchParams.get("periodEnd") }, rows });
   } catch (err) {
