@@ -16,7 +16,7 @@ export function Section({
     <div className={cn("flex flex-col gap-3", className)}>
       {(title || actions) && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          {title && <h2 className="min-w-0 truncate text-lg font-semibold">{title}</h2>}
+          {title && <h2 className="min-w-0 truncate font-display text-lg font-semibold">{title}</h2>}
           {actions && <div className="flex flex-wrap gap-2 shrink-0">{actions}</div>}
         </div>
       )}

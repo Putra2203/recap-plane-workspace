@@ -33,7 +33,7 @@ export function StatCard({
         </p>
         {badge && <div className="shrink-0">{badge}</div>}
       </div>
-      <p className={cn("mt-1 break-words text-xl font-semibold tabular-nums sm:text-2xl", TONE_TEXT[tone])}>{value}</p>
+      <p className={cn("mt-1 break-words font-display text-xl font-semibold tabular-nums sm:text-2xl", TONE_TEXT[tone])}>{value}</p>
       {hint && <p className="mt-1 line-clamp-2 text-xs text-fg-subtle">{hint}</p>}
     </div>
   );

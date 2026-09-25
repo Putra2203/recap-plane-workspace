@@ -24,7 +24,7 @@ export function AppHeader({
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-surface">
       <div className="mx-auto flex h-12 w-full max-w-screen-xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <span className="min-w-0 truncate font-semibold text-fg">{appName}</span>
+        <span className="min-w-0 truncate font-display text-base font-semibold text-fg">{appName}</span>
 
         <nav className="hidden items-center gap-4 md:flex">
           {navItems.map((item) => {
@@ -34,8 +34,8 @@ export function AppHeader({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "relative py-3.5 text-sm text-fg-subtle hover:text-fg",
-                  active && "font-medium text-fg after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-primary",
+                  "relative py-3.5 font-display text-sm font-medium text-fg-subtle transition-colors hover:text-fg",
+                  active && "text-primary after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary",
                 )}
               >
                 {item.label}
@@ -52,7 +52,11 @@ export function AppHeader({
         {navItems.map((item) => {
           const active = pathname === item.href;
           return (
-            <Link key={item.href} href={item.href} className={cn("text-sm text-fg-subtle", active && "font-medium text-fg")}>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn("font-display text-sm font-medium text-fg-subtle", active && "text-primary")}
+            >
               {item.label}
             </Link>
           );

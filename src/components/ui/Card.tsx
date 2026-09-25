@@ -19,7 +19,7 @@ export function CardHeader({
   return (
     <div className={cn("flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2.5 sm:px-4", className)}>
       <div className="min-w-0">
-        <h2 className="text-base font-semibold truncate">{title}</h2>
+        <h2 className="truncate font-display text-base font-semibold">{title}</h2>
         {description && <p className="text-xs text-fg-subtle">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2 shrink-0">{actions}</div>}

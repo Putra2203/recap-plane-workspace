@@ -1,61 +1,80 @@
 @import "tailwindcss";
 
+/*
+ * Canopy design system — see MASTER.md for the full spec, thesis, and
+ * WCAG contrast numbers behind every color pair below. Same token names as
+ * the previous "Aubergine" system on purpose: every component in
+ * src/components/ui/ references these tokens (bg-primary, rounded-card,
+ * etc.), so swapping only the values here re-skins the whole app without
+ * touching most component files.
+ */
 @theme inline {
-  /* Font */
-  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Font — display (Fredoka, chunky/rounded) for headings/buttons/nav/badges,
+     body (Nunito Sans) for paragraphs/table data/inputs. Nunito Sans, not
+     plain Nunito: its more neutral terminals read better at 13px in dense
+     tables — see MASTER.md's Typography section for why this deviates from
+     the raw palette-lookup suggestion. */
+  --font-sans: var(--font-nunito-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fredoka), var(--font-nunito-sans), ui-rounded, sans-serif;
 
   /* Surface */
-  --color-canvas: #f4f2f5;
+  --color-canvas: #fff8ec;
   --color-surface: #ffffff;
-  --color-surface-muted: #f8f6f9;
-  --color-surface-hover: #f1edf3;
+  --color-surface-muted: #fff1d9;
+  --color-surface-hover: #ffe8c7;
 
   /* Border */
-  --color-line: #e4dfe7;
-  --color-line-strong: #cfc7d4;
+  --color-line: #eedfc0;
+  --color-line-strong: #a38048; /* 3.47:1 vs canvas — visible control borders */
 
   /* Text */
-  --color-fg: #221a27;          /* judul, angka, isi utama        */
-  --color-fg-muted: #57495f;    /* teks sekunder, label form       */
-  --color-fg-subtle: #6f6177;   /* meta, header tabel, caption     */
-  --color-fg-faint: #a597ac;    /* hanya dekoratif/placeholder (kontras rendah, jangan untuk info penting) */
-  --color-fg-disabled: #cfc7d4;
+  --color-fg: #2b2417; /* 14.55:1 vs canvas — judul, angka, isi utama */
+  --color-fg-muted: #4a3d28; /* 10.00:1 vs canvas — teks sekunder, label form */
+  --color-fg-subtle: #6e5d3e; /* 6.03:1 vs canvas — meta, header tabel, caption */
+  --color-fg-faint: #b0a483; /* dekoratif/placeholder saja — jangan untuk info penting */
+  --color-fg-disabled: #c9bc9a;
 
-  /* Primary (aubergine) */
-  --color-primary: #54305f;
-  --color-primary-hover: #43254c;
-  --color-primary-fg: #ffffff;
-  --color-primary-soft: #f1e9f4; /* background state aktif (nav/tab terpilih) */
-  --color-focus: #54305f;
+  /* Primary (leaf green) */
+  --color-primary: #0e6b2c;
+  --color-primary-hover: #0a5623;
+  --color-primary-fg: #ffffff; /* 6.65:1 vs primary */
+  --color-primary-soft: #e3f5e7; /* background state aktif (nav/tab terpilih) */
+  --color-focus: #0e6b2c;
+
+  /* Accent (amber) — dipakai hemat: highlight sekunder, ikon */
+  --color-accent: #ffb020;
+  --color-accent-fg: #4a3400;
 
   /* Status */
-  --color-warning: #7f5500;
-  --color-warning-bg: #fdf7e8;
-  --color-warning-line: #edd69a;
-  --color-danger: #a8283a;
-  --color-danger-bg: #fcf0f1;
-  --color-danger-line: #f0c3c8;
-  --color-danger-hover: #8c1f30;
-  --color-success: #246a48;
-  --color-success-bg: #eef6f1;
-  --color-success-line: #c2dece;
-  --color-info: #3d4f7a;
-  --color-info-bg: #eff2f9;
-  --color-info-line: #c9d2e8;
+  --color-warning: #8a5a00; /* 5.42:1 vs warning-bg */
+  --color-warning-bg: #fff4db;
+  --color-warning-line: #d9a94a;
+  --color-danger: #c23a28; /* 4.70:1 vs danger-bg */
+  --color-danger-bg: #fdede8;
+  --color-danger-line: #cc7a62; /* 3.05:1 vs canvas */
+  --color-danger-hover: #a32e1f;
+  --color-success: #0e6b2c; /* = primary: selesai = warna brand */
+  --color-success-bg: #e3f5e7;
+  --color-success-line: #6fae84;
+  --color-info: #2a6f86; /* 4.99:1 vs info-bg */
+  --color-info-bg: #e7f3f6;
+  --color-info-line: #5f8fa0; /* 3.36:1 vs canvas */
 
-  /* Radius */
-  --radius-control: 4px;
-  --radius-card: 12px;
+  /* Radius — kontras sengaja: kecil untuk kontrol, besar & pillowy untuk container */
+  --radius-control: 10px;
+  --radius-card: 20px;
+  --radius-pill: 999px;
 
-  /* Type scale compact (ukuran / line-height) */
+  /* Type scale compact (ukuran / line-height) — dashboard padat tetap padat
+     walau brand jadi lebih hangat; kepadatan bukan hal yang berubah di sini */
   --text-xs: 0.75rem;     --text-xs--line-height: 1rem;       /* 12/16 caption, badge, header tabel */
   --text-sm: 0.8125rem;   --text-sm--line-height: 1.25rem;    /* 13/20 body default, tabel, input   */
-  --text-base: 0.875rem;  --text-base--line-height: 1.375rem; /* 14/22 paragraf, judul card         */
-  --text-lg: 1rem;        --text-lg--line-height: 1.5rem;     /* 16/24 judul section                */
-  --text-xl: 1.125rem;    --text-xl--line-height: 1.625rem;   /* 18/26 judul halaman mobile         */
-  --text-2xl: 1.375rem;   --text-2xl--line-height: 1.75rem;   /* 22/28 judul halaman desktop, nilai StatCard */
+  --text-base: 0.9375rem; --text-base--line-height: 1.375rem; /* 15/22 paragraf, judul card         */
+  --text-lg: 1.0625rem;   --text-lg--line-height: 1.5rem;     /* 17/24 judul section                */
+  --text-xl: 1.25rem;     --text-xl--line-height: 1.625rem;   /* 20/26 judul halaman mobile         */
+  --text-2xl: 1.625rem;   --text-2xl--line-height: 1.875rem;  /* 26/30 judul halaman desktop, nilai StatCard */
 
-  /* Breakpoint: md resmi ditambahkan untuk switch tabel → card */
+  /* Breakpoint: md untuk switch tabel → card */
   --breakpoint-sm: 40rem;  /* 640  */
   --breakpoint-md: 48rem;  /* 768  */
   --breakpoint-lg: 64rem;  /* 1024 */
@@ -98,4 +117,25 @@ body {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* One-time staggered fade-up for StatGrid on page load only (motion-principles'
+   "frequency rule": the more often something animates, the subtler it must be —
+   this loads once per page visit, unlike table rows which re-render on every
+   filter change, so it stays out of this treatment). Each StatCard sets
+   --stagger-index inline; delay is computed here, not duplicated per class. */
+@keyframes canopy-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.canopy-stagger {
+  animation: canopy-fade-up 320ms cubic-bezier(0.2, 0, 0, 1) both;
+  animation-delay: calc(var(--stagger-index, 0) * 45ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .canopy-stagger {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }

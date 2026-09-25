@@ -1,13 +1,24 @@
 import type { Metadata } from "next";
-import { Instrument_Sans } from "next/font/google";
+import { Fredoka, Nunito_Sans } from "next/font/google";
 import { AppHeader } from "@/components/ui/AppHeader";
 import SyncStatus from "@/components/SyncStatus";
 import "./globals.css";
 
-const instrumentSans = Instrument_Sans({
+// Fredoka: chunky rounded display face — headings, buttons, nav, badges.
+// Fredoka has no 400 weight, so 500 is the floor (matches MASTER.md's scale).
+const fredoka = Fredoka({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-instrument-sans",
+  weight: ["500", "600", "700"],
+  variable: "--font-fredoka",
+  display: "swap",
+});
+
+// Nunito Sans: body/data face. Deliberately not plain Nunito — its more
+// neutral terminals read better at 13px in dense tables. See MASTER.md.
+const nunitoSans = Nunito_Sans({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-nunito-sans",
   display: "swap",
 });
 
@@ -24,7 +35,7 @@ const NAV_ITEMS = [
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="id" className={`${instrumentSans.variable} h-full`}>
+    <html lang="id" className={`${fredoka.variable} ${nunitoSans.variable} h-full`}>
       <body className="flex min-h-full flex-col bg-canvas font-sans text-fg antialiased">
         <AppHeader appName="Plane Recap" navItems={NAV_ITEMS} actions={<SyncStatus />} />
         <main className="flex-1">{children}</main>

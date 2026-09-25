@@ -6,21 +6,36 @@ import { cn } from "@/lib/cn";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "link" | "danger";
 export type ButtonSize = "sm" | "md";
 
+// The press effect (compressing offset shadow + translateY on :active) is
+// Canopy's signature detail — see MASTER.md. Reserved for primary/danger
+// only: the two "committing" actions. Every other variant stays flat, or
+// the shadow stops meaning "this does something real" and just becomes
+// decoration on every button.
+const PRESS_EASE = "ease-[cubic-bezier(0.34,1.56,0.64,1)]";
+
 const BASE =
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-medium " +
-  "transition-colors disabled:pointer-events-none disabled:bg-surface-muted disabled:text-fg-disabled disabled:border-line";
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-display font-semibold " +
+  `transition-[transform,box-shadow,background-color,color] duration-200 ${PRESS_EASE} ` +
+  "disabled:pointer-events-none disabled:bg-surface-muted disabled:text-fg-disabled disabled:border-line disabled:shadow-none disabled:translate-y-0";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-primary text-primary-fg hover:bg-primary-hover",
+  primary:
+    "bg-primary text-primary-fg shadow-[0_4px_0_var(--color-primary-hover)] " +
+    "hover:brightness-105 active:translate-y-[3px] active:shadow-[0_1px_0_var(--color-primary-hover)]",
   secondary: "border border-line-strong bg-surface text-fg hover:bg-surface-hover",
   ghost: "text-fg-muted hover:bg-surface-hover hover:text-fg",
-  link: "h-auto px-0 text-primary underline-offset-4 hover:underline disabled:bg-transparent",
-  danger: "bg-danger text-primary-fg hover:bg-danger-hover",
+  link: "h-auto px-0 text-primary underline-offset-4 hover:underline disabled:bg-transparent disabled:shadow-none",
+  danger:
+    "bg-danger text-primary-fg shadow-[0_4px_0_var(--color-danger-hover)] " +
+    "hover:brightness-105 active:translate-y-[3px] active:shadow-[0_1px_0_var(--color-danger-hover)]",
 };
 
+// Mobile floor bumped toward the 44px touch-target recommendation
+// (mobile-principles: 44px recommended / 24px WCAG AA floor) — this app is
+// used from phones. Desktop stays compact since a pointer needs less room.
 const SIZES: Record<ButtonSize, string> = {
-  sm: "h-8 px-2.5 text-xs sm:h-7",
-  md: "h-9 px-3 text-sm sm:h-8",
+  sm: "h-9 px-2.5 text-xs sm:h-7",
+  md: "h-11 px-4 text-sm sm:h-9",
 };
 
 interface CommonProps {
