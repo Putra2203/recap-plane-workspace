@@ -1,43 +1,64 @@
+<div align="center">
+
 # Plane Recap
 
-A recap & reporting dashboard for a [Plane.so](https://plane.so) workspace — built to answer
-"who did what, how much, and are we on track" without digging through Plane's own UI project by
-project. Read-only by design: it mirrors your workspace into Postgres and never writes back to
-Plane, so creating and editing work items, cycles, and modules stays in Plane where it belongs.
+**Recap & reporting for your [Plane.so](https://plane.so) workspace.**
+
+Who did what, how much, and are we on track — without digging through Plane project by project.
+
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-5-2D3748?logo=prisma&logoColor=white)
+![Supabase](https://img.shields.io/badge/Postgres-Supabase-3ECF8E?logo=supabase&logoColor=white)
+![Design system](https://img.shields.io/badge/design_system-Canopy-0E6B2C)
+
+</div>
+
+---
+
+Read-only by design: it mirrors your workspace into Postgres and never writes back to Plane, so
+creating and editing work items, cycles, and modules stays in Plane where it belongs. This app is
+purely the recap layer on top.
 
 ## What's in it
 
-- **Overview** — every project's task/estimate progress, overdue count, and active cycle at a
-  glance.
-- **Member Recap** — point recap per person for a period, filterable by project, cycle, module,
-  and label, with a per-member analytics breakdown.
-- **Project Detail** — cycle/module progress and overdue tasks for one project.
-- **Report Builder** — preview a progress or point-recap report, export to PDF or plain text.
-- **Report History** — every report ever previewed, reopened against current data.
-- **Monthly Lock** — freeze a month's point recap per project so the numbers stop moving once the
-  period is closed, even if Plane data changes later.
-- **KPI** — configure a target (point, task, or both, with a completion weight) per member and
-  period; a score only ever appears once a target exists.
-- **Sync** — a manual "Sync Now" button, plus an optional scheduled sync (self-hosted interval or
-  a Vercel Cron Job) so recap data stays fresh without anyone remembering to click it.
+| Page | What it does |
+|---|---|
+| **Overview** | Every project's task/estimate progress, overdue count, and active cycle at a glance. |
+| **Member Recap** | Point recap per person for a period, filterable by project, cycle, module, and label, with a per-member analytics breakdown. |
+| **Project Detail** | Cycle/module progress and overdue tasks for one project. |
+| **Report Builder** | Preview a progress or point-recap report, export to PDF or plain text. |
+| **Report History** | Every report ever previewed, reopened against current data. |
+| **Monthly Lock** | Freeze a month's point recap per project so the numbers stop moving once the period is closed, even if Plane data changes later. |
+| **KPI** | Configure a target (point, task, or both, with a completion weight) per member and period — a score only ever appears once a target exists. |
+| **Sync** | A manual "Sync Now" button, plus an optional scheduled sync (self-hosted interval or a Vercel Cron Job) so recap data stays fresh without anyone remembering to click it. |
 
 ## Design system — Canopy
 
-The UI runs on **Canopy**, this app's own design system (`MASTER.md`): a warm, bold, saturated
-leaf-green-and-cream palette with chunky rounded display type for headings and buttons, paired
-with a plainer body face for dense data. Chrome — header, buttons, badges, stat cards — gets the
-playful treatment; tables stay flat, bordered, and tightly spaced, because scanning fifty rows
-should never get heavier than it has to be. Every color pair is WCAG contrast-checked, not
-eyeballed.
+<img align="right" width="160" alt="" src="https://placehold.co/160x120/FFF8EC/0E6B2C.png?text=Canopy&font=roboto">
 
-| Token | | Role |
-|---|---|---|
-| `canvas` `#FFF8EC` | ![#FFF8EC](https://placehold.co/14/FFF8EC/FFF8EC.png) | Page background |
-| `primary` `#0E6B2C` | ![#0E6B2C](https://placehold.co/14/0E6B2C/0E6B2C.png) | Brand, primary actions |
-| `accent` `#FFB020` | ![#FFB020](https://placehold.co/14/FFB020/FFB020.png) | Secondary highlight |
-| `danger` `#C23A28` | ![#C23A28](https://placehold.co/14/C23A28/C23A28.png) | Overdue, destructive |
+The UI runs on **Canopy**, this app's own design system (see [`MASTER.md`](./MASTER.md) for the
+full spec): a warm, bold, saturated leaf-green-and-cream palette with chunky rounded display type
+for headings and buttons, paired with a plainer body face for dense data. Chrome — header,
+buttons, badges, stat cards — gets the playful treatment; tables stay flat, bordered, and tightly
+spaced, because scanning fifty rows should never get heavier than it has to be.
+
+Every color pair below is WCAG contrast-checked, not eyeballed.
+
+| | Token | Hex | Role |
+|---|---|---|---|
+| ![](https://placehold.co/40x24/FFF8EC/FFF8EC.png) | `canvas` | `#FFF8EC` | Page background |
+| ![](https://placehold.co/40x24/0E6B2C/0E6B2C.png) | `primary` | `#0E6B2C` | Brand, primary actions |
+| ![](https://placehold.co/40x24/FFB020/FFB020.png) | `accent` | `#FFB020` | Secondary highlight, icons |
+| ![](https://placehold.co/40x24/2A6F86/2A6F86.png) | `info` | `#2A6F86` | Informational state |
+| ![](https://placehold.co/40x24/8A5A00/8A5A00.png) | `warning` | `#8A5A00` | Warning state |
+| ![](https://placehold.co/40x24/C23A28/C23A28.png) | `danger` | `#C23A28` | Overdue, destructive |
 
 Full token table, type scale, spacing/radius/shadow rail, and motion rules live in `MASTER.md`.
+
+<br clear="right">
 
 ## Stack
 
@@ -80,3 +101,11 @@ target) or on Vercel. On Vercel, scheduled sync goes through a Cron Job (`vercel
 `GET /api/cron/sync`) instead of an in-process interval, since a serverless instance isn't
 guaranteed to stay alive long enough for one; see the comments in `src/lib/auto-sync.ts` and
 `src/lib/sync.ts` for why.
+
+---
+
+<div align="center">
+
+Built for a single Plane.so workspace — no multi-tenant support, no auth layer, by design.
+
+</div>
