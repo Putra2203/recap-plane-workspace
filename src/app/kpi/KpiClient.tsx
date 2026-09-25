@@ -203,35 +203,43 @@ export default function KpiClient({ initialProjects, initialMembers }: { initial
       <Card>
         <CardHeader title="Tambah / Ubah Target" description="Target berdasarkan role belum didukung — Plane tidak punya konsep role yang cocok untuk KPI. Gunakan per-anggota, opsional dibatasi per-project." />
         <CardBody className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end [&>*]:sm:w-48">
-            <Field label="Anggota">
-              <Select value={formMemberId} onChange={(e) => setFormMemberId(e.target.value)}>
-                {initialMembers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.displayName}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Scope" hint="Kosongkan untuk lintas-project">
-              <Select value={formProjectId} onChange={(e) => setFormProjectId(e.target.value)}>
-                <option value="">Semua Project</option>
-                {initialProjects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Target Point">
-              <Input type="number" min={0} placeholder="cth. 40" value={targetPoint} onChange={(e) => setTargetPoint(e.target.value)} />
-            </Field>
-            <Field label="Target Task">
-              <Input type="number" min={0} placeholder="opsional" value={targetTask} onChange={(e) => setTargetTask(e.target.value)} />
-            </Field>
-            <Field label="Bobot Point (%)" hint="Sisanya jadi bobot task">
-              <Input type="number" min={0} max={100} value={weightCompletion} onChange={(e) => setWeightCompletion(e.target.value)} />
-            </Field>
+          {/* Same nesting FilterBar.tsx uses: the width-constrained field
+              group and the action button are siblings inside one
+              flex-wrap row, not the button forced into the [&>*]:sm:w-48
+              group — that forced it to the same 192px field width and let
+              it get pushed onto its own line the moment the row ran out
+              of space. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end [&>*]:sm:w-48">
+              <Field label="Anggota">
+                <Select value={formMemberId} onChange={(e) => setFormMemberId(e.target.value)}>
+                  {initialMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.displayName}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Scope" hint="Kosongkan untuk lintas-project">
+                <Select value={formProjectId} onChange={(e) => setFormProjectId(e.target.value)}>
+                  <option value="">Semua Project</option>
+                  {initialProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Target Point">
+                <Input type="number" min={0} placeholder="cth. 40" value={targetPoint} onChange={(e) => setTargetPoint(e.target.value)} />
+              </Field>
+              <Field label="Target Task">
+                <Input type="number" min={0} placeholder="opsional" value={targetTask} onChange={(e) => setTargetTask(e.target.value)} />
+              </Field>
+              <Field label="Bobot Point (%)" hint="Sisanya jadi bobot task">
+                <Input type="number" min={0} max={100} value={weightCompletion} onChange={(e) => setWeightCompletion(e.target.value)} />
+              </Field>
+            </div>
             <Button variant="primary" onClick={saveTarget} loading={saving}>
               Simpan Target
             </Button>
