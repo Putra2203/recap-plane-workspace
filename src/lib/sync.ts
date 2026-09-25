@@ -197,10 +197,8 @@ export interface SyncResult {
   durationMs: number;
 }
 
-export async function runFullSync(): Promise<SyncResult> {
+async function performSync(runId: string): Promise<void> {
   const startedAt = Date.now();
-  const run = await prisma.syncRun.create({ data: { status: "running" } });
-
   try {
     const projects = await planeClient.listProjects();
     let workItemsSynced = 0;
@@ -211,7 +209,7 @@ export async function runFullSync(): Promise<SyncResult> {
     });
 
     await prisma.syncRun.update({
-      where: { id: run.id },
+      where: { id: runId },
       data: {
         status: "success",
         finishedAt: new Date(),
@@ -219,13 +217,44 @@ export async function runFullSync(): Promise<SyncResult> {
         workItemsSynced,
       },
     });
-
-    return { syncRunId: run.id, projectsSynced: projects.length, workItemsSynced, durationMs: Date.now() - startedAt };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    await prisma.syncRun.update({ where: { id: run.id }, data: { status: "failed", finishedAt: new Date(), error: message } });
-    throw err;
+    await prisma.syncRun.update({ where: { id: runId }, data: { status: "failed", finishedAt: new Date(), error: message } });
+    // Nothing awaits performSync() (see startSync) — log instead of throwing
+    // into an unhandled rejection. The failure is already recorded on the
+    // SyncRun row, which is what the client actually reads.
+    console.error(`[sync] run ${runId} failed after ${Date.now() - startedAt}ms:`, err);
   }
+}
+
+/**
+ * Kicks off a sync and returns almost immediately (just the time to check
+ * for an in-progress run + create the row) instead of blocking for the
+ * ~2-3 minutes a full sync takes.
+ *
+ * This matters beyond UX: a full sync as one long HTTP response is fragile
+ * behind any reverse proxy/tunnel with its own timeout shorter than that —
+ * confirmed in production (app.erdavid.my.id) as the exact cause of a
+ * "JSON.parse: unexpected character" error on the client, because the proxy
+ * cut the connection mid-sync and returned an HTML timeout page instead of
+ * letting the request finish. Returning fast sidesteps that regardless of
+ * the proxy's timeout setting.
+ *
+ * Relies on this running as a long-lived Node process (`next start` behind
+ * a reverse proxy, which is how this app is deployed) — fire-and-forget
+ * background work like this would NOT reliably continue on a serverless
+ * platform (e.g. Vercel) that freezes the function after the response is
+ * sent, unless using that platform's own waitUntil()-style API.
+ */
+export async function startSync(): Promise<{ syncRunId: string; alreadyRunning: boolean }> {
+  const inProgress = await prisma.syncRun.findFirst({ where: { status: "running" }, orderBy: { startedAt: "desc" } });
+  if (inProgress) {
+    return { syncRunId: inProgress.id, alreadyRunning: true };
+  }
+
+  const run = await prisma.syncRun.create({ data: { status: "running" } });
+  performSync(run.id).catch((err) => console.error(`[sync] run ${run.id} threw unexpectedly:`, err));
+  return { syncRunId: run.id, alreadyRunning: false };
 }
 
 export async function getLatestSyncRun() {

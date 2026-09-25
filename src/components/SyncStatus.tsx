@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +14,8 @@ interface SyncRun {
   workItemsSynced: number;
   error: string | null;
 }
+
+const POLL_INTERVAL_MS = 3000;
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -30,16 +32,26 @@ export default function SyncStatus() {
   const [syncing, setSyncing] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const reloadedRef = useRef(false);
 
-  const fetchStatus = useCallback(() => {
-    fetch("/api/sync/status")
-      .then((res) => res.json())
-      .then((body) => setRun(body.run ?? null))
-      .catch(() => {});
+  const fetchStatus = useCallback(async () => {
+    const res = await fetch("/api/sync/status");
+    const body = await res.json();
+    const latest: SyncRun | null = body.run ?? null;
+    setRun(latest);
+    return latest;
   }, []);
 
+  // Initial load — also picks up a sync already running (e.g. started from
+  // another tab, or this page was reloaded mid-sync) and resumes polling for
+  // it, since a sync can now outlive any single request/page load.
   useEffect(() => {
-    fetchStatus();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial status fetch on mount (and resuming polling for an already-running sync) is intentional, not a render loop
+    fetchStatus()
+      .then((latest) => {
+        if (latest?.status === "running") setSyncing(true);
+      })
+      .catch(() => {});
   }, [fetchStatus]);
 
   useEffect(() => {
@@ -49,6 +61,44 @@ export default function SyncStatus() {
     return () => clearInterval(id);
   }, [syncing]);
 
+  // Polls /api/sync/status while a sync is in progress instead of awaiting
+  // one long-lived POST response. A full sync takes 2-3+ minutes for a large
+  // workspace — as a single blocking request that's fragile behind any
+  // reverse proxy/tunnel with a shorter timeout than that. Confirmed in
+  // production (app.erdavid.my.id): the proxy cut the connection mid-sync
+  // and the browser got back an HTML timeout page, which then failed
+  // res.json() with "JSON.parse: unexpected character...". Every request
+  // here is fast regardless of how long the sync itself takes.
+  useEffect(() => {
+    if (!syncing) return;
+    let cancelled = false;
+    const poll = () => {
+      fetchStatus()
+        .then((latest) => {
+          if (cancelled || !latest || latest.status === "running") return;
+          setSyncing(false);
+          if (latest.status === "success") {
+            if (!reloadedRef.current) {
+              reloadedRef.current = true;
+              // Data on the current page was fetched before the sync finished — reload so it reflects fresh data.
+              window.location.reload();
+            }
+          } else {
+            setError(latest.error ?? "Sync gagal");
+          }
+        })
+        .catch(() => {
+          // Transient poll failure (e.g. a proxy hiccup) — keep polling
+          // rather than surfacing an error for one missed check.
+        });
+    };
+    const id = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [syncing, fetchStatus]);
+
   const runSync = () => {
     setSyncing(true);
     setError(null);
@@ -56,13 +106,14 @@ export default function SyncStatus() {
     fetch("/api/sync/run", { method: "POST" })
       .then(async (res) => {
         const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? "Sync gagal");
-        fetchStatus();
-        // Data on the current page was fetched before the sync finished — reload so it reflects fresh data.
-        window.location.reload();
+        if (!res.ok) throw new Error(body.error ?? "Gagal memulai sync");
+        // Polling effect above takes over from here and flips `syncing` off
+        // once the run actually finishes.
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setSyncing(false));
+      .catch((err) => {
+        setError(err.message);
+        setSyncing(false);
+      });
   };
 
   const label = syncing ? `Syncing... ${elapsed}s` : "Sync";

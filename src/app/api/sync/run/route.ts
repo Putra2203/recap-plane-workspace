@@ -1,23 +1,16 @@
 import { NextResponse } from "next/server";
-import { runFullSync } from "@/lib/sync";
-import { PlaneConfigError } from "@/lib/plane";
+import { startSync } from "@/lib/sync";
 
-// Full sync against Plane can take well over a minute for a large workspace
-// (16 projects, 1480+ work items observed). This route intentionally blocks
-// until it's done rather than faking a background job — see the "Sync Now"
-// button's loading state on the client for how that's surfaced.
-// If this ever runs on a serverless host (e.g. Vercel), raise the function
-// timeout to match — the default (10-60s depending on plan) will kill this.
-export const maxDuration = 300;
-
+// Returns almost immediately — the actual sync (2-3+ minutes for a large
+// workspace) continues in the background. See startSync()'s doc comment:
+// this specifically fixes a proxy-timeout bug (JSON.parse error on the
+// client behind app.erdavid.my.id) that a long blocking response caused.
+// The client polls GET /api/sync/status to know when it's done.
 export async function POST() {
   try {
-    const result = await runFullSync();
-    return NextResponse.json({ result });
+    const { syncRunId, alreadyRunning } = await startSync();
+    return NextResponse.json({ syncRunId, alreadyRunning });
   } catch (err) {
-    if (err instanceof PlaneConfigError) {
-      return NextResponse.json({ error: err.message, configError: true }, { status: 400 });
-    }
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
