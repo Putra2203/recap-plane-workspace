@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, History } from "lucide-react";
 import ConfigNotice from "@/components/ConfigNotice";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -130,7 +130,15 @@ export default function ReportsClient({ initialProjects }: { initialProjects: Pr
 
   return (
     <PageShell>
-      <PageHeader title="Report Builder" description="Buat laporan, preview, lalu export ke PDF atau teks siap salin." />
+      <PageHeader
+        title="Report Builder"
+        description="Buat laporan, preview, lalu export ke PDF atau teks siap salin."
+        actions={
+          <Button variant="secondary" size="sm" href="/reports/history" leftIcon={<History className="size-4" />}>
+            Riwayat Laporan
+          </Button>
+        }
+      />
 
       <FilterBar>
         <Field label="Jenis Laporan">

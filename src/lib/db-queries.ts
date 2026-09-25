@@ -54,6 +54,14 @@ export async function getMemberOptions() {
   return prisma.member.findMany({ select: { id: true, displayName: true }, orderBy: { displayName: "asc" } });
 }
 
+// PRD 33.9 — every POST /api/reports/generate call logs one row here (see
+// that route). This just reads them back; reopening one is handled by
+// /reports/history/[id], which re-runs buildReport from the stored filters
+// instead of writing a new history row.
+export async function getReportHistory() {
+  return prisma.reportHistory.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
+}
+
 function toIsoDate(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
 }
