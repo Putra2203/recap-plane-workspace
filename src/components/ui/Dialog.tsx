@@ -14,15 +14,24 @@ import { cn } from "@/lib/cn";
 // default styling is used. One component, no JS breakpoint detection:
 // mobile is a bottom sheet by default, `sm:` classes turn it into a
 // centered modal.
+export type DialogSize = "md" | "lg";
+
+const DESKTOP_WIDTH: Record<DialogSize, string> = {
+  md: "sm:max-w-md", // 448px — short confirmations, simple detail
+  lg: "sm:max-w-2xl", // 672px — content with a breakdown/table (e.g. member analytics)
+};
+
 export function Dialog({
   open,
   onOpenChange,
   title,
+  size = "md",
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: ReactNode;
+  size?: DialogSize;
   children: ReactNode;
 }) {
   return (
@@ -35,14 +44,17 @@ export function Dialog({
         <RadixDialog.Content
           className={cn(
             "fixed z-50 flex flex-col bg-surface outline-none transition-transform",
-            // Mobile: bottom sheet
+            // Mobile: bottom sheet — width and height stay identical
+            // regardless of `size`, since a phone screen has no room to
+            // grow into; only the desktop breakpoint below varies by size.
             "inset-x-0 bottom-0 max-h-[85vh] rounded-t-card border-t border-line",
             // Desktop: centered modal
-            "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[80vh] sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-card sm:border sm:border-line",
+            "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[80vh] sm:w-full sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-card sm:border sm:border-line",
+            DESKTOP_WIDTH[size],
           )}
         >
           <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
-            <RadixDialog.Title className="min-w-0 truncate text-base font-semibold">{title}</RadixDialog.Title>
+            <RadixDialog.Title className="min-w-0 truncate font-display text-base font-semibold">{title}</RadixDialog.Title>
             <RadixDialog.Close className="shrink-0 rounded-control p-1 text-fg-subtle hover:bg-surface-hover hover:text-fg" aria-label="Tutup">
               <X className="size-4" />
             </RadixDialog.Close>

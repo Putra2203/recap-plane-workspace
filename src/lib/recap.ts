@@ -92,7 +92,18 @@ export interface MemberRecapRow {
   doneTask: number;
   totalPoint: number;
   uncountedEstimateTask: number;
-  tasks: { id: string; name: string; point: number; hasUncountedEstimate: boolean; completedAt: string | null }[];
+  tasks: {
+    id: string;
+    name: string;
+    point: number;
+    hasUncountedEstimate: boolean;
+    completedAt: string | null;
+    // Additive — already on PlaneWorkItem, just wasn't threaded through to
+    // the per-task record before. Lets the Member Recap detail view break a
+    // member's work down by project/priority instead of a flat list.
+    projectId: string;
+    priority: PlaneWorkItem["priority"];
+  }[];
 }
 
 export type DateBasis = "created" | "completed";
@@ -156,7 +167,15 @@ export function computeMemberRecap(
       existing.doneTask += 1;
       existing.totalPoint += point;
       if (uncounted) existing.uncountedEstimateTask += 1;
-      existing.tasks.push({ id: item.id, name: item.name, point, hasUncountedEstimate: uncounted, completedAt: item.completed_at });
+      existing.tasks.push({
+        id: item.id,
+        name: item.name,
+        point,
+        hasUncountedEstimate: uncounted,
+        completedAt: item.completed_at,
+        projectId: item.project,
+        priority: item.priority,
+      });
       rows.set(assigneeId, existing);
     }
   }
