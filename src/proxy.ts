@@ -27,7 +27,12 @@ export const config = {
     // Everything except: the login page itself (else a redirect loop), the
     // login/logout API routes (else the password could never be submitted),
     // GET /api/cron/sync (Vercel's Cron Job calls this with no browser
-    // session at all — it has its own CRON_SECRET check), and static assets.
-    "/((?!login|api/auth|api/cron/sync|_next/static|_next/image|favicon.ico).*)",
+    // session at all — it has its own CRON_SECRET check), static assets,
+    // and the icon/manifest files the browser fetches on its own on every
+    // page including /login itself, pre-auth — gating those doesn't hide
+    // anything (they're not data), it just breaks the tab icon and PWA
+    // manifest for anyone not yet logged in (confirmed: icon0.svg and
+    // manifest.json both 307'd to /login before this was added).
+    "/((?!login|api/auth|api/cron/sync|_next/static|_next/image|favicon.ico|apple-icon.png|icon0.svg|icon1.png|manifest.json|web-app-manifest-192x192.png|web-app-manifest-512x512.png).*)",
   ],
 };
