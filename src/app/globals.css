@@ -88,6 +88,22 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* iOS Safari gives <input type="date"|"month"> a browser-internal minimum
+   content width for its native picker chrome that can exceed a narrow flex
+   container even with width:100% already set (Input.tsx's CONTROL_BASE has
+   both w-full and min-w-0 — neither is enough on its own here, since this
+   isn't a flex-shrink issue, it's the native control's own intrinsic sizing
+   winning over the computed width). Confirmed from a real device screenshot:
+   the date fields' right edge overflows the FilterBar card on mobile while
+   the <select> fields next to them don't.
+   width:0 strips that content-based intrinsic sizing baseline; min-width
+   only then resolves as a percentage against the parent instead. */
+input[type="date"],
+input[type="month"] {
+  width: 0;
+  min-width: 100%;
+}
+
 body {
   background: var(--color-canvas);
   color: var(--color-fg);
