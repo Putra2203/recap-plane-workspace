@@ -31,6 +31,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Overview" },
   { href: "/members", label: "Member Recap" },
   { href: "/reports", label: "Reports" },
+  { href: "/snapshots", label: "Kunci Bulanan" },
 ];
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

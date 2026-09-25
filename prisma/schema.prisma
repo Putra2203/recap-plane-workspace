@@ -15,7 +15,13 @@ model MonthlySnapshot {
   period           String // format "2026-09" (YYYY-MM)
   projectId        String
   projectName      String
-  cycleId          String?
+  // "" = whole-project lock (the only scope the UI offers today); a real
+  // cycle id is reserved for a future per-cycle lock. Not nullable on
+  // purpose: Postgres does NOT enforce @@unique across NULL values (two
+  // NULLs are never considered equal), which would silently defeat the
+  // uniqueness this lock's whole guarantee depends on. "" is a real,
+  // comparable value, so the constraint below actually holds.
+  cycleId          String   @default("")
   memberId         String
   memberName       String
   totalAssignedTask Int
