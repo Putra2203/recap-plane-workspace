@@ -35,6 +35,37 @@ model MonthlySnapshot {
   @@index([period])
 }
 
+// Konfigurasi target KPI (PRD 17). Organisasi mengisi target dulu — sistem
+// TIDAK pernah menghitung skor KPI untuk sebuah (period, projectId,
+// memberId) tanpa baris target di sini terlebih dulu. Aktual (completed
+// point/task) dihitung on-the-fly dari data recap yang sama dengan Member
+// Recap/Snapshot (completed-date basis), bukan disimpan di sini.
+model KpiTarget {
+  id        String @id @default(cuid())
+  period    String // "YYYY-MM"
+  // "" = target berlaku lintas-project (dijumlah dari semua project member
+  // ini pada periode itu) — "Target berdasarkan project" dari PRD jadi
+  // sebuah projectId spesifik di sini. Sama pola dengan MonthlySnapshot's
+  // cycleId: default "" bukan null karena Postgres tidak menegakkan
+  // @@unique lintas NULL.
+  projectId String @default("")
+  memberId  String
+
+  targetPoint Float? // "Target point per bulan"
+  targetTask  Int? // "Target task"
+  // Bobot pencapaian point vs task saat KEDUANYA di-set (0-100 = persentase
+  // bobot untuk point; sisanya untuk task). "Bobot completion" dari PRD.
+  // Diabaikan kalau cuma salah satu target yang di-set — skor lalu murni
+  // dari target itu saja.
+  weightCompletion Float @default(100)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([period, projectId, memberId])
+  @@index([period])
+}
+
 // Riwayat laporan yang pernah dibuat (PRD 33.9).
 model ReportHistory {
   id          String   @id @default(cuid())

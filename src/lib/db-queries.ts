@@ -49,6 +49,11 @@ export async function getProjectOptions() {
   return prisma.project.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
 }
 
+// Lightweight — just enough for a member dropdown (KPI target config).
+export async function getMemberOptions() {
+  return prisma.member.findMany({ select: { id: true, displayName: true }, orderBy: { displayName: "asc" } });
+}
+
 function toIsoDate(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
 }
