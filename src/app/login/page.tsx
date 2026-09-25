@@ -53,8 +53,28 @@ export default function LoginPage() {
     // of multi-level percentage chain that's fragile in practice (it broke
     // here: the card rendered pinned to the top instead of centered). A
     // viewport unit sidesteps ancestor height resolution entirely.
-    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-12">
-      <div className="w-full max-w-sm">
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-canvas px-4 py-12">
+      {/* Decorative ambient background — genjutsu paint (light scope, see
+          globals.css's canopy-drift-* comment for the thesis). Purely
+          visual: aria-hidden + pointer-events-none, three low-opacity
+          blurred shapes in existing Canopy tokens drifting slowly and
+          independently so they never read as a synced pulse. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="canopy-login-shape-a absolute size-72 rounded-full bg-primary/20 blur-3xl"
+          style={{ top: "8%", left: "6%" }}
+        />
+        <div
+          className="canopy-login-shape-b absolute size-64 rounded-full bg-accent/25 blur-3xl"
+          style={{ bottom: "10%", right: "8%" }}
+        />
+        <div
+          className="canopy-login-shape-c absolute size-56 rounded-full bg-info/20 blur-3xl"
+          style={{ top: "58%", left: "62%" }}
+        />
+      </div>
+
+      <div className="canopy-login-enter relative w-full max-w-sm">
         <Card>
           <CardHeader title="Plane Recap" description="Masukkan password tim untuk masuk." />
           <CardBody>

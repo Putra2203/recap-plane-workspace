@@ -151,3 +151,51 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Login page only (src/app/login/page.tsx) — a deliberately scoped exception
+   to this file's own "no idle animation" rule (MASTER.md's interaction
+   thesis: "Nothing else moves — no scroll parallax, no idle animation").
+   genjutsu paint, light scope, interaction thesis validated: this page is a
+   low-frequency entry point (seen once per session, never mid-work like a
+   data table), so ambient background motion doesn't fight the "the more
+   often it plays, the subtler it must be" rule the rest of the app follows.
+   transform-only, three different periods so the three shapes never sync
+   into a visible pulse. */
+@keyframes canopy-drift-a {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(34px, -22px); }
+}
+@keyframes canopy-drift-b {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(-28px, 26px); }
+}
+@keyframes canopy-drift-c {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(22px, 32px); }
+}
+.canopy-login-shape-a { animation: canopy-drift-a 24s ease-in-out infinite; }
+.canopy-login-shape-b { animation: canopy-drift-b 29s ease-in-out infinite; }
+.canopy-login-shape-c { animation: canopy-drift-c 34s ease-in-out infinite; }
+
+/* Card entrance — reuses Button.tsx's PRESS_EASE spring curve (Canopy's
+   existing signature "life" cue) rather than inventing a new easing value. */
+@keyframes canopy-login-enter {
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.canopy-login-enter {
+  animation: canopy-login-enter 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canopy-login-shape-a,
+  .canopy-login-shape-b,
+  .canopy-login-shape-c {
+    animation: none;
+  }
+  .canopy-login-enter {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
