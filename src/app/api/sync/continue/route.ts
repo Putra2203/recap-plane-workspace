@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { performSyncChunk } from "@/lib/sync";
 
 // Internal continuation endpoint — the server calls this on itself
@@ -22,6 +22,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "runId required" }, { status: 400 });
   }
 
-  await performSyncChunk(runId);
+  // Ack fast and do this chunk's work via after(), same reason /api/sync/run
+  // does — the caller (the previous chunk's scheduleNextChunk) awaits this
+  // response before its own invocation can end. If we awaited the full chunk
+  // here instead, that wait would cascade backward through every prior chunk
+  // in the chain, right back to needing one invocation alive for the whole
+  // sync — exactly the bug this endpoint exists to avoid.
+  const runChunk = () => performSyncChunk(runId).catch((err) => console.error(`[sync] run ${runId} chunk threw unexpectedly:`, err));
+  try {
+    after(runChunk);
+  } catch {
+    runChunk();
+  }
   return NextResponse.json({ ok: true });
 }

@@ -234,18 +234,24 @@ async function claimChunk(runId: string): Promise<{ pendingIds: string[] } | nul
   return { pendingIds };
 }
 
-function scheduleNextChunk(runId: string) {
+// Must be awaited by the caller (see performSyncChunk) on Vercel: an
+// un-awaited fetch() fired from inside after() races the function instance
+// being frozen as soon as the current after() callback's promise resolves,
+// which can drop the request before it's even sent — this was confirmed in
+// production as the exact reason chunk 2 never started. /api/sync/continue
+// acks immediately and does its own chunk's work via its own after(), so
+// awaiting here only costs one quick round trip, not the next chunk's full
+// duration (which would otherwise cascade the 60s cap all the way down the
+// chain, right back to the original bug).
+async function scheduleNextChunk(runId: string): Promise<void> {
   if (process.env.VERCEL) {
-    // A fresh HTTP request creates a genuinely new invocation with its own
-    // maxDuration budget — looping further inside this invocation's after()
-    // would NOT get more time (see comment above MAX_CHUNKS_PER_RUN).
     if (!process.env.VERCEL_URL) {
       console.error(`[sync] run ${runId}: cannot schedule next chunk, VERCEL_URL is not set`);
       return;
     }
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (process.env.CRON_SECRET) headers.authorization = `Bearer ${process.env.CRON_SECRET}`;
-    fetch(`https://${process.env.VERCEL_URL}/api/sync/continue`, {
+    await fetch(`https://${process.env.VERCEL_URL}/api/sync/continue`, {
       method: "POST",
       headers,
       body: JSON.stringify({ runId }),
@@ -288,7 +294,7 @@ export async function performSyncChunk(runId: string): Promise<void> {
       },
     });
 
-    if (!finished) scheduleNextChunk(runId);
+    if (!finished) await scheduleNextChunk(runId);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     await prisma.syncRun.update({ where: { id: runId }, data: { status: "failed", finishedAt: new Date(), error: message } });
