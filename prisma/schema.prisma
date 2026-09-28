@@ -198,11 +198,16 @@ model WorkItem {
 }
 
 model SyncRun {
-  id              String    @id @default(cuid())
-  startedAt       DateTime  @default(now())
-  finishedAt      DateTime?
-  status          String // running | success | failed
-  projectsSynced  Int       @default(0)
-  workItemsSynced Int       @default(0)
-  error           String?
+  id                String    @id @default(cuid())
+  startedAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+  finishedAt        DateTime?
+  status            String // running | success | failed
+  projectsSynced    Int       @default(0)
+  workItemsSynced   Int       @default(0)
+  // Project IDs not yet synced this run; each chunk pops up to CONCURRENCY off the front.
+  pendingProjectIds Json?
+  // Doubles as an optimistic-concurrency token (claimChunk) and a chunk-count safety cap.
+  chunkCount        Int       @default(0)
+  error             String?
 }

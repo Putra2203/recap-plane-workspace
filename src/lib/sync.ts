@@ -198,40 +198,105 @@ async function syncProject(projectId: string, projectMeta: Awaited<ReturnType<ty
   return { workItemCount: items.length };
 }
 
-export interface SyncResult {
-  syncRunId: string;
-  projectsSynced: number;
-  workItemsSynced: number;
-  durationMs: number;
+// Vercel's Hobby plan hard-caps a function's maxDuration at 60s, and per
+// Next's own docs, after() runs for that same platform-configured duration —
+// it does NOT grant extra time beyond the invocation's cap. A full sync
+// (2-3+ minutes across all projects) can't fit in one invocation there, so
+// it's split into chunks of CONCURRENCY projects each. Every chunk is its
+// own invocation (see scheduleNextChunk) with a fresh time budget, chained
+// together until pendingProjectIds is empty.
+const MAX_CHUNKS_PER_RUN = 200; // defense-in-depth against a bug causing runaway invocations
+
+async function claimChunk(runId: string): Promise<{ pendingIds: string[] } | null> {
+  const run = await prisma.syncRun.findUnique({ where: { id: runId } });
+  if (!run || run.status !== "running") return null;
+
+  const pendingIds = (run.pendingProjectIds as string[] | null) ?? [];
+  if (pendingIds.length === 0) return null;
+
+  if (run.chunkCount >= MAX_CHUNKS_PER_RUN) {
+    await prisma.syncRun.update({
+      where: { id: runId },
+      data: { status: "failed", finishedAt: new Date(), error: `Sync aborted after ${MAX_CHUNKS_PER_RUN} chunks without finishing` },
+    });
+    return null;
+  }
+
+  // Optimistic claim: chunkCount doubles as a version token so a duplicate or
+  // retried continuation call for the same run (e.g. a re-fired self-fetch)
+  // can't also claim and double-process the same batch of projects.
+  const claim = await prisma.syncRun.updateMany({
+    where: { id: runId, chunkCount: run.chunkCount },
+    data: { chunkCount: run.chunkCount + 1 },
+  });
+  if (claim.count === 0) return null; // someone else claimed this chunk first
+
+  return { pendingIds };
 }
 
-async function performSync(runId: string): Promise<void> {
-  const startedAt = Date.now();
+function scheduleNextChunk(runId: string) {
+  if (process.env.VERCEL) {
+    // A fresh HTTP request creates a genuinely new invocation with its own
+    // maxDuration budget — looping further inside this invocation's after()
+    // would NOT get more time (see comment above MAX_CHUNKS_PER_RUN).
+    if (!process.env.VERCEL_URL) {
+      console.error(`[sync] run ${runId}: cannot schedule next chunk, VERCEL_URL is not set`);
+      return;
+    }
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (process.env.CRON_SECRET) headers.authorization = `Bearer ${process.env.CRON_SECRET}`;
+    fetch(`https://${process.env.VERCEL_URL}/api/sync/continue`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ runId }),
+    }).catch((err) => console.error(`[sync] run ${runId}: failed to schedule next chunk:`, err));
+  } else {
+    // Self-hosted long-lived process — no invocation boundary to cross, just keep going in-process.
+    performSyncChunk(runId).catch((err) => console.error(`[sync] run ${runId} chunk threw unexpectedly:`, err));
+  }
+}
+
+export async function performSyncChunk(runId: string): Promise<void> {
+  const claimed = await claimChunk(runId);
+  if (!claimed) return;
+
   try {
-    const projects = await planeClient.listProjects();
-    let workItemsSynced = 0;
+    const batchIds = claimed.pendingIds.slice(0, CONCURRENCY);
+    const remaining = claimed.pendingIds.slice(CONCURRENCY);
 
-    await mapWithConcurrency(projects, async (project) => {
-      const { workItemCount } = await syncProject(project.id, project);
-      workItemsSynced += workItemCount;
-    });
+    const allProjects = await planeClient.listProjects();
+    const projectsById = new Map(allProjects.map((p) => [p.id, p]));
 
+    let workItemsThisBatch = 0;
+    await Promise.all(
+      batchIds
+        .filter((id) => projectsById.has(id))
+        .map(async (id) => {
+          const { workItemCount } = await syncProject(id, projectsById.get(id)!);
+          workItemsThisBatch += workItemCount;
+        }),
+    );
+
+    const finished = remaining.length === 0;
     await prisma.syncRun.update({
       where: { id: runId },
       data: {
-        status: "success",
-        finishedAt: new Date(),
-        projectsSynced: projects.length,
-        workItemsSynced,
+        pendingProjectIds: remaining,
+        projectsSynced: { increment: batchIds.length },
+        workItemsSynced: { increment: workItemsThisBatch },
+        ...(finished ? { status: "success", finishedAt: new Date() } : {}),
       },
     });
+
+    if (!finished) scheduleNextChunk(runId);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     await prisma.syncRun.update({ where: { id: runId }, data: { status: "failed", finishedAt: new Date(), error: message } });
-    // Nothing awaits performSync() (see startSync) — log instead of throwing
-    // into an unhandled rejection. The failure is already recorded on the
-    // SyncRun row, which is what the client actually reads.
-    console.error(`[sync] run ${runId} failed after ${Date.now() - startedAt}ms:`, err);
+    // Nothing awaits performSyncChunk() from startSync()/scheduleNextChunk's
+    // self-hosted branch — log instead of throwing into an unhandled
+    // rejection. The failure is already recorded on the SyncRun row, which
+    // is what the client actually reads.
+    console.error(`[sync] run ${runId} chunk failed:`, err);
   }
 }
 
@@ -248,14 +313,16 @@ async function performSync(runId: string): Promise<void> {
  * letting the request finish. Returning fast sidesteps that regardless of
  * the proxy's timeout setting.
  *
- * Uses Next's after() so the background work survives on a serverless
- * platform (Vercel) too: after() is Next's own portable wrapper around
- * waitUntil() — on Vercel it keeps the function instance alive until the
- * callback finishes instead of freezing it right after the response is
- * sent; on a long-lived Node process (`next start` behind a reverse proxy,
- * this app's other deployment target) it behaves the same as the bare
- * fire-and-forget call this used to be. Either way, nothing awaits it here
- * on the request path — the client polls SyncRun via GET /api/sync/status.
+ * Uses Next's after() so the first chunk starts right after the response is
+ * sent: after() is Next's own portable wrapper around waitUntil() — on
+ * Vercel it keeps the function instance alive until the callback finishes
+ * instead of freezing it right after the response is sent (bounded by that
+ * invocation's maxDuration, see performSyncChunk); on a long-lived Node
+ * process (`next start` behind a reverse proxy, this app's other deployment
+ * target) it behaves the same as the bare fire-and-forget call this used to
+ * be. Either way, nothing awaits it here on the request path — the client
+ * polls SyncRun via GET /api/sync/status, and subsequent chunks (if any)
+ * are chained by scheduleNextChunk.
  *
  * after() only works inside an active request (it throws synchronously
  * otherwise), so it can't be used unconditionally — auto-sync.ts calls this
@@ -264,14 +331,17 @@ async function performSync(runId: string): Promise<void> {
  * long-lived self-hosted process anyway (auto-sync.ts skips itself entirely
  * on Vercel), where the bare pattern was always safe.
  */
-const STALE_RUN_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+const STALE_RUN_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes without a chunk completing
 
 export async function cleanupStaleSyncRuns() {
   const cutoff = new Date(Date.now() - STALE_RUN_TIMEOUT_MS);
   await prisma.syncRun.updateMany({
     where: {
       status: "running",
-      startedAt: { lt: cutoff },
+      // updatedAt (not startedAt) — a healthy multi-chunk run legitimately
+      // runs past 3 minutes in total; staleness means no chunk has
+      // completed recently, i.e. the continuation chain actually died.
+      updatedAt: { lt: cutoff },
     },
     data: {
       status: "failed",
@@ -289,12 +359,16 @@ export async function startSync(): Promise<{ syncRunId: string; alreadyRunning: 
     return { syncRunId: inProgress.id, alreadyRunning: true };
   }
 
-  const run = await prisma.syncRun.create({ data: { status: "running" } });
-  const runInBackground = () => performSync(run.id).catch((err) => console.error(`[sync] run ${run.id} threw unexpectedly:`, err));
+  const projects = await planeClient.listProjects();
+  const run = await prisma.syncRun.create({
+    data: { status: "running", pendingProjectIds: projects.map((p) => p.id) },
+  });
+  const runFirstChunk = () =>
+    performSyncChunk(run.id).catch((err) => console.error(`[sync] run ${run.id} threw unexpectedly:`, err));
   try {
-    after(runInBackground);
+    after(runFirstChunk);
   } catch {
-    runInBackground();
+    runFirstChunk();
   }
   return { syncRunId: run.id, alreadyRunning: false };
 }
