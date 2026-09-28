@@ -251,11 +251,27 @@ async function scheduleNextChunk(runId: string): Promise<void> {
     }
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (process.env.CRON_SECRET) headers.authorization = `Bearer ${process.env.CRON_SECRET}`;
-    await fetch(`https://${process.env.VERCEL_URL}/api/sync/continue`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ runId }),
-    }).catch((err) => console.error(`[sync] run ${runId}: failed to schedule next chunk:`, err));
+    try {
+      const res = await fetch(`https://${process.env.VERCEL_URL}/api/sync/continue`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ runId }),
+      });
+      if (!res.ok) {
+        // fetch() only rejects on network failure, NOT on a non-2xx response
+        // (e.g. Vercel's own Deployment Protection, or a CRON_SECRET
+        // mismatch, returning 401 before this ever reaches the route
+        // handler) — that would otherwise be silently swallowed, leaving the
+        // run stuck until the generic 3-minute stale-timeout message, which
+        // hides the real cause. Surface it on the run immediately instead.
+        const body = await res.text().catch(() => "");
+        throw new Error(`Continuation call failed: ${res.status} ${res.statusText}${body ? ` — ${body.slice(0, 500)}` : ""}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      await prisma.syncRun.update({ where: { id: runId }, data: { status: "failed", finishedAt: new Date(), error: message } });
+      console.error(`[sync] run ${runId}: failed to schedule next chunk:`, err);
+    }
   } else {
     // Self-hosted long-lived process — no invocation boundary to cross, just keep going in-process.
     performSyncChunk(runId).catch((err) => console.error(`[sync] run ${runId} chunk threw unexpectedly:`, err));
