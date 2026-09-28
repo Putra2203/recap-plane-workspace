@@ -11,7 +11,7 @@ import { prisma } from "./prisma";
 // connections outright (not even a clean 429) under bursts of ~10+
 // simultaneous requests. Keep this low — reliability matters more than
 // sync speed here, since sync is a manual, infrequent background op.
-const CONCURRENCY = 2;
+const CONCURRENCY = 4;
 
 async function mapWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = [];
@@ -89,13 +89,11 @@ function toWorkItemRow(
 }
 
 async function syncProject(projectId: string, projectMeta: Awaited<ReturnType<typeof planeClient.listProjects>>[number]) {
-  // Two small batches instead of 6 fully-concurrent requests per project.
-  const [items, states, cycles] = await Promise.all([
+  // Fetch all 6 project resources in parallel instead of two sequential batches
+  const [items, states, cycles, modules, members, labels] = await Promise.all([
     planeClient.listWorkItems(projectId),
     planeClient.listStates(projectId),
     planeClient.listCycles(projectId),
-  ]);
-  const [modules, members, labels] = await Promise.all([
     planeClient.listModules(projectId),
     planeClient.listMembers(projectId),
     planeClient.listLabels(projectId),
@@ -182,12 +180,19 @@ async function syncProject(projectId: string, projectMeta: Awaited<ReturnType<ty
     }),
   ]);
 
-  for (const m of members) {
-    await prisma.member.upsert({
-      where: { id: m.id },
-      create: { id: m.id, firstName: m.first_name, lastName: m.last_name, email: m.email, displayName: m.display_name },
-      update: { firstName: m.first_name, lastName: m.last_name, email: m.email, displayName: m.display_name, syncedAt: new Date() },
-    });
+  // Bulk upsert all members in a single database transaction instead of N sequential awaits
+  const uniqueMembersMap = new Map(members.map((m) => [m.id, m]));
+  const uniqueMembers = Array.from(uniqueMembersMap.values());
+  if (uniqueMembers.length > 0) {
+    await prisma.$transaction(
+      uniqueMembers.map((m) =>
+        prisma.member.upsert({
+          where: { id: m.id },
+          create: { id: m.id, firstName: m.first_name, lastName: m.last_name, email: m.email, displayName: m.display_name },
+          update: { firstName: m.first_name, lastName: m.last_name, email: m.email, displayName: m.display_name, syncedAt: new Date() },
+        })
+      )
+    );
   }
 
   return { workItemCount: items.length };
