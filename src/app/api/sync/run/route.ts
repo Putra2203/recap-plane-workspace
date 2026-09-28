@@ -6,6 +6,8 @@ import { startSync } from "@/lib/sync";
 // this specifically fixes a proxy-timeout bug (JSON.parse error on the
 // client behind app.erdavid.my.id) that a long blocking response caused.
 // The client polls GET /api/sync/status to know when it's done.
+export const maxDuration = 60;
+
 export async function POST() {
   try {
     const { syncRunId, alreadyRunning } = await startSync();

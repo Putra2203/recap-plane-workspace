@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { startSync } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Vercel Cron Job target (see vercel.json). auto-sync.ts's setInterval is
 // deliberately disabled on Vercel — a serverless function instance can be

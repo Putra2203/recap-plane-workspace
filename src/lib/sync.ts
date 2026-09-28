@@ -28,26 +28,28 @@ async function getCycleModuleMembership(
   modules: { id: string; total_issues: number }[],
 ) {
   const itemCycleId = new Map<string, string>();
-  await mapWithConcurrency(
-    cycles.filter((c) => c.total_issues > 0),
-    async (cycle) => {
-      const ids = await planeClient.listCycleWorkItemIds(projectId, cycle.id);
-      for (const id of ids) itemCycleId.set(id, cycle.id);
-    },
-  );
-
   const itemModuleIds = new Map<string, Set<string>>();
-  await mapWithConcurrency(
-    modules.filter((m) => m.total_issues > 0),
-    async (mod) => {
-      const ids = await planeClient.listModuleWorkItemIds(projectId, mod.id);
-      for (const id of ids) {
-        const set = itemModuleIds.get(id) ?? new Set<string>();
-        set.add(mod.id);
-        itemModuleIds.set(id, set);
-      }
-    },
-  );
+
+  await Promise.all([
+    mapWithConcurrency(
+      cycles.filter((c) => c.total_issues > 0),
+      async (cycle) => {
+        const ids = await planeClient.listCycleWorkItemIds(projectId, cycle.id);
+        for (const id of ids) itemCycleId.set(id, cycle.id);
+      },
+    ),
+    mapWithConcurrency(
+      modules.filter((m) => m.total_issues > 0),
+      async (mod) => {
+        const ids = await planeClient.listModuleWorkItemIds(projectId, mod.id);
+        for (const id of ids) {
+          const set = itemModuleIds.get(id) ?? new Set<string>();
+          set.add(mod.id);
+          itemModuleIds.set(id, set);
+        }
+      },
+    ),
+  ]);
 
   return { itemCycleId, itemModuleIds };
 }
@@ -257,7 +259,26 @@ async function performSync(runId: string): Promise<void> {
  * long-lived self-hosted process anyway (auto-sync.ts skips itself entirely
  * on Vercel), where the bare pattern was always safe.
  */
+const STALE_RUN_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+
+export async function cleanupStaleSyncRuns() {
+  const cutoff = new Date(Date.now() - STALE_RUN_TIMEOUT_MS);
+  await prisma.syncRun.updateMany({
+    where: {
+      status: "running",
+      startedAt: { lt: cutoff },
+    },
+    data: {
+      status: "failed",
+      finishedAt: new Date(),
+      error: "Sync timed out or process was terminated abruptly",
+    },
+  });
+}
+
 export async function startSync(): Promise<{ syncRunId: string; alreadyRunning: boolean }> {
+  await cleanupStaleSyncRuns();
+
   const inProgress = await prisma.syncRun.findFirst({ where: { status: "running" }, orderBy: { startedAt: "desc" } });
   if (inProgress) {
     return { syncRunId: inProgress.id, alreadyRunning: true };
@@ -274,5 +295,6 @@ export async function startSync(): Promise<{ syncRunId: string; alreadyRunning: 
 }
 
 export async function getLatestSyncRun() {
+  await cleanupStaleSyncRuns();
   return prisma.syncRun.findFirst({ orderBy: { startedAt: "desc" } });
 }
