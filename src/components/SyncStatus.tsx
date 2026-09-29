@@ -15,8 +15,6 @@ interface SyncRun {
   error: string | null;
 }
 
-const POLL_INTERVAL_MS = 3000;
-
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
@@ -33,6 +31,7 @@ export default function SyncStatus() {
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const reloadedRef = useRef(false);
+  const executingRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
     const res = await fetch("/api/sync/status");
@@ -42,17 +41,56 @@ export default function SyncStatus() {
     return latest;
   }, []);
 
+  const executeSyncSteps = useCallback(async (syncRunId: string) => {
+    if (executingRef.current) return;
+    executingRef.current = true;
+    try {
+      let finished = false;
+      while (!finished) {
+        const res = await fetch("/api/sync/step", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runId: syncRunId }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error ?? "Gagal memproses sync step");
+        }
+        if (data.finished || data.status !== "running") {
+          finished = true;
+          if (data.status === "success") {
+            setSyncing(false);
+            if (!reloadedRef.current) {
+              reloadedRef.current = true;
+              window.location.reload();
+            }
+          } else if (data.status === "failed") {
+            setError(data.error ?? "Sync gagal");
+            setSyncing(false);
+          }
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sync gagal";
+      setError(message);
+      setSyncing(false);
+    } finally {
+      executingRef.current = false;
+    }
+  }, []);
+
   // Initial load — also picks up a sync already running (e.g. started from
-  // another tab, or this page was reloaded mid-sync) and resumes polling for
-  // it, since a sync can now outlive any single request/page load.
+  // another tab, or this page was reloaded mid-sync) and resumes stepping for it.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial status fetch on mount (and resuming polling for an already-running sync) is intentional, not a render loop
     fetchStatus()
       .then((latest) => {
-        if (latest?.status === "running") setSyncing(true);
+        if (latest?.status === "running") {
+          setSyncing(true);
+          executeSyncSteps(latest.id);
+        }
       })
       .catch(() => {});
-  }, [fetchStatus]);
+  }, [fetchStatus, executeSyncSteps]);
 
   useEffect(() => {
     if (!syncing) return;
@@ -60,44 +98,6 @@ export default function SyncStatus() {
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
     return () => clearInterval(id);
   }, [syncing]);
-
-  // Polls /api/sync/status while a sync is in progress instead of awaiting
-  // one long-lived POST response. A full sync takes 2-3+ minutes for a large
-  // workspace — as a single blocking request that's fragile behind any
-  // reverse proxy/tunnel with a shorter timeout than that. Confirmed in
-  // production (app.erdavid.my.id): the proxy cut the connection mid-sync
-  // and the browser got back an HTML timeout page, which then failed
-  // res.json() with "JSON.parse: unexpected character...". Every request
-  // here is fast regardless of how long the sync itself takes.
-  useEffect(() => {
-    if (!syncing) return;
-    let cancelled = false;
-    const poll = () => {
-      fetchStatus()
-        .then((latest) => {
-          if (cancelled || !latest || latest.status === "running") return;
-          setSyncing(false);
-          if (latest.status === "success") {
-            if (!reloadedRef.current) {
-              reloadedRef.current = true;
-              // Data on the current page was fetched before the sync finished — reload so it reflects fresh data.
-              window.location.reload();
-            }
-          } else {
-            setError(latest.error ?? "Sync gagal");
-          }
-        })
-        .catch(() => {
-          // Transient poll failure (e.g. a proxy hiccup) — keep polling
-          // rather than surfacing an error for one missed check.
-        });
-    };
-    const id = setInterval(poll, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [syncing, fetchStatus]);
 
   const runSync = () => {
     setSyncing(true);
@@ -107,8 +107,9 @@ export default function SyncStatus() {
       .then(async (res) => {
         const body = await res.json();
         if (!res.ok) throw new Error(body.error ?? "Gagal memulai sync");
-        // Polling effect above takes over from here and flips `syncing` off
-        // once the run actually finishes.
+        if (body.syncRunId) {
+          executeSyncSteps(body.syncRunId);
+        }
       })
       .catch((err) => {
         setError(err.message);
@@ -121,7 +122,7 @@ export default function SyncStatus() {
 
   return (
     <div className="flex items-center gap-3 text-xs">
-      {/* Status text — desktop only; mobile keeps just the icon button (plan decision, spec is silent on this text at small widths) */}
+      {/* Status text — desktop only */}
       <span className="hidden sm:inline">
         {error && <span className="text-danger">{error}</span>}
         {!error && run === undefined && <span className="text-fg-subtle">...</span>}

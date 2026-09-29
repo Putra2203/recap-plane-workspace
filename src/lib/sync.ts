@@ -367,6 +367,92 @@ export async function performSyncChunk(runId: string): Promise<void> {
  * long-lived self-hosted process anyway (auto-sync.ts skips itself entirely
  * on Vercel), where the bare pattern was always safe.
  */
+export async function performSyncStep(runId: string): Promise<{
+  status: string;
+  finished: boolean;
+  projectsSynced: number;
+  workItemsSynced: number;
+  remainingCount: number;
+  error?: string | null;
+}> {
+  const run = await prisma.syncRun.findUnique({ where: { id: runId } });
+  if (!run) {
+    throw new Error("SyncRun not found");
+  }
+  if (run.status !== "running") {
+    return {
+      status: run.status,
+      finished: run.status !== "running",
+      projectsSynced: run.projectsSynced,
+      workItemsSynced: run.workItemsSynced,
+      remainingCount: ((run.pendingProjectIds as string[] | null) ?? []).length,
+      error: run.error,
+    };
+  }
+
+  const pendingIds = (run.pendingProjectIds as string[] | null) ?? [];
+  if (pendingIds.length === 0) {
+    const updated = await prisma.syncRun.update({
+      where: { id: runId },
+      data: { status: "success", finishedAt: new Date() },
+    });
+    return {
+      status: updated.status,
+      finished: true,
+      projectsSynced: updated.projectsSynced,
+      workItemsSynced: updated.workItemsSynced,
+      remainingCount: 0,
+    };
+  }
+
+  const projectIdToSync = pendingIds[0];
+  const remaining = pendingIds.slice(1);
+
+  try {
+    const allProjects = await planeClient.listProjects();
+    const projectMeta = allProjects.find((p) => p.id === projectIdToSync);
+
+    let workItemsCount = 0;
+    if (projectMeta) {
+      const { workItemCount } = await syncProject(projectIdToSync, projectMeta);
+      workItemsCount = workItemCount;
+    }
+
+    const isFinished = remaining.length === 0;
+    const updated = await prisma.syncRun.update({
+      where: { id: runId },
+      data: {
+        pendingProjectIds: remaining,
+        projectsSynced: { increment: projectMeta ? 1 : 0 },
+        workItemsSynced: { increment: workItemsCount },
+        ...(isFinished ? { status: "success", finishedAt: new Date() } : {}),
+      },
+    });
+
+    return {
+      status: updated.status,
+      finished: isFinished,
+      projectsSynced: updated.projectsSynced,
+      workItemsSynced: updated.workItemsSynced,
+      remainingCount: remaining.length,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    const updated = await prisma.syncRun.update({
+      where: { id: runId },
+      data: { status: "failed", finishedAt: new Date(), error: message },
+    });
+    return {
+      status: updated.status,
+      finished: true,
+      projectsSynced: updated.projectsSynced,
+      workItemsSynced: updated.workItemsSynced,
+      remainingCount: remaining.length,
+      error: message,
+    };
+  }
+}
+
 const STALE_RUN_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes without a chunk completing
 
 export async function cleanupStaleSyncRuns() {
@@ -374,9 +460,6 @@ export async function cleanupStaleSyncRuns() {
   await prisma.syncRun.updateMany({
     where: {
       status: "running",
-      // updatedAt (not startedAt) — a healthy multi-chunk run legitimately
-      // runs past 3 minutes in total; staleness means no chunk has
-      // completed recently, i.e. the continuation chain actually died.
       updatedAt: { lt: cutoff },
     },
     data: {
@@ -399,13 +482,6 @@ export async function startSync(): Promise<{ syncRunId: string; alreadyRunning: 
   const run = await prisma.syncRun.create({
     data: { status: "running", pendingProjectIds: projects.map((p) => p.id) },
   });
-  const runFirstChunk = () =>
-    performSyncChunk(run.id).catch((err) => console.error(`[sync] run ${run.id} threw unexpectedly:`, err));
-  try {
-    after(runFirstChunk);
-  } catch {
-    runFirstChunk();
-  }
   return { syncRunId: run.id, alreadyRunning: false };
 }
 
