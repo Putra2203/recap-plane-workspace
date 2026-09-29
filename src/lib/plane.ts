@@ -48,6 +48,7 @@ async function planeGet<T>(path: string, params?: Record<string, string | number
         headers: { "X-API-Key": API_TOKEN, "Content-Type": "application/json" },
         // Analytics/report pages want fresh data; caller can wrap with Next.js cache if needed.
         cache: "no-store",
+        signal: AbortSignal.timeout(10000),
       });
     } catch (networkErr) {
       // Cloudflare in front of this instance sometimes resets the

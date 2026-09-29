@@ -11,7 +11,7 @@ import { prisma } from "./prisma";
 // connections outright (not even a clean 429) under bursts of ~10+
 // simultaneous requests. Keep this low — reliability matters more than
 // sync speed here, since sync is a manual, infrequent background op.
-const CONCURRENCY = 4;
+const CONCURRENCY = 2;
 
 async function mapWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = [];
@@ -245,7 +245,8 @@ async function claimChunk(runId: string): Promise<{ pendingIds: string[] } | nul
 // chain, right back to the original bug).
 async function scheduleNextChunk(runId: string): Promise<void> {
   if (process.env.VERCEL) {
-    if (!process.env.VERCEL_URL) {
+    const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+    if (!host) {
       console.error(`[sync] run ${runId}: cannot schedule next chunk, VERCEL_URL is not set`);
       return;
     }
@@ -264,10 +265,11 @@ async function scheduleNextChunk(runId: string): Promise<void> {
       headers["x-vercel-protection-bypass"] = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
     }
     try {
-      const res = await fetch(`https://${process.env.VERCEL_URL}/api/sync/continue`, {
+      const res = await fetch(`https://${host}/api/sync/continue`, {
         method: "POST",
         headers,
         body: JSON.stringify({ runId }),
+        signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) {
         // fetch() only rejects on network failure, NOT on a non-2xx response
@@ -295,21 +297,21 @@ export async function performSyncChunk(runId: string): Promise<void> {
   if (!claimed) return;
 
   try {
-    const batchIds = claimed.pendingIds.slice(0, CONCURRENCY);
-    const remaining = claimed.pendingIds.slice(CONCURRENCY);
+    // Process 1 project per chunk on Vercel to guarantee ultra-fast execution (~2-3s per invocation) well below the 60s limit
+    const chunkSize = process.env.VERCEL ? 1 : CONCURRENCY;
+    const batchIds = claimed.pendingIds.slice(0, chunkSize);
+    const remaining = claimed.pendingIds.slice(chunkSize);
 
     const allProjects = await planeClient.listProjects();
     const projectsById = new Map(allProjects.map((p) => [p.id, p]));
 
     let workItemsThisBatch = 0;
-    await Promise.all(
-      batchIds
-        .filter((id) => projectsById.has(id))
-        .map(async (id) => {
-          const { workItemCount } = await syncProject(id, projectsById.get(id)!);
-          workItemsThisBatch += workItemCount;
-        }),
-    );
+    for (const id of batchIds) {
+      if (projectsById.has(id)) {
+        const { workItemCount } = await syncProject(id, projectsById.get(id)!);
+        workItemsThisBatch += workItemCount;
+      }
+    }
 
     const finished = remaining.length === 0;
     await prisma.syncRun.update({
