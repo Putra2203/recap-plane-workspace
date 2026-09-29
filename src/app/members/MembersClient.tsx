@@ -80,10 +80,23 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 }
 
+const PRIORITY_ORDER: Record<Priority, number> = {
+  urgent: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+  none: 0,
+};
+
 // The member detail dialog's "analytics" content — by-project breakdown +
 // a recent-activity task feed. Kept as its own component so MembersClient's
 // filter/table logic doesn't get buried under this.
 function MemberAnalytics({ member, projectNames }: { member: MemberRow; projectNames: Map<string, string> }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterProject, setFilterProject] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+  const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "point-desc" | "point-asc" | "priority-desc" | "name-asc">("date-desc");
+
   const avgPoint = member.doneTask > 0 ? Math.round((member.totalPoint / member.doneTask) * 10) / 10 : 0;
 
   const byProject = useMemo(() => {
@@ -99,10 +112,54 @@ function MemberAnalytics({ member, projectNames }: { member: MemberRow; projectN
 
   const maxProjectPoint = Math.max(1, ...byProject.map((p) => p.point));
 
-  const recentTasks = useMemo(
-    () => [...member.tasks].sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? "")),
-    [member.tasks],
-  );
+  const taskProjectOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of member.tasks) {
+      map.set(t.projectId, projectNames.get(t.projectId) ?? "Unknown project");
+    }
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [member.tasks, projectNames]);
+
+  const filteredAndSortedTasks = useMemo(() => {
+    let result = [...member.tasks];
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((t) => t.name.toLowerCase().includes(q));
+    }
+
+    if (filterProject) {
+      result = result.filter((t) => t.projectId === filterProject);
+    }
+
+    if (filterPriority) {
+      result = result.filter((t) => t.priority === filterPriority);
+    }
+
+    result.sort((a, b) => {
+      if (sortBy === "date-desc") {
+        return (b.completedAt ?? "").localeCompare(a.completedAt ?? "");
+      }
+      if (sortBy === "date-asc") {
+        return (a.completedAt ?? "").localeCompare(b.completedAt ?? "");
+      }
+      if (sortBy === "point-desc") {
+        return b.point - a.point;
+      }
+      if (sortBy === "point-asc") {
+        return a.point - b.point;
+      }
+      if (sortBy === "priority-desc") {
+        return PRIORITY_ORDER[b.priority] - PRIORITY_ORDER[a.priority];
+      }
+      if (sortBy === "name-asc") {
+        return a.name.localeCompare(b.name);
+      }
+      return 0;
+    });
+
+    return result;
+  }, [member.tasks, searchQuery, filterProject, filterPriority, sortBy]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -135,31 +192,85 @@ function MemberAnalytics({ member, projectNames }: { member: MemberRow; projectN
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <h3 className="font-display text-sm font-semibold text-fg">Task Selesai</h3>
-        <ul className="flex flex-col gap-2.5">
-          {recentTasks.map((t) => (
-            <li key={t.id} className="flex items-start justify-between gap-3 border-t border-line pt-2.5 text-sm first:border-t-0 first:pt-0">
-              <div className="min-w-0">
-                <p className="break-words">{t.name}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-fg-subtle">{projectNames.get(t.projectId) ?? "Unknown project"}</span>
-                  {t.priority !== "none" && (
-                    <>
-                      <span className="text-fg-faint">·</span>
-                      <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
-                    </>
-                  )}
-                  <span className="text-fg-faint">·</span>
-                  <span className="text-xs text-fg-subtle">{formatDate(t.completedAt)}</span>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="font-display text-sm font-semibold text-fg">
+            Task Selesai ({filteredAndSortedTasks.length} dari {member.tasks.length})
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Input
+            placeholder="Cari task..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 text-xs"
+          />
+          <Select
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+            className="h-8 text-xs"
+          >
+            <option value="">Semua Project</option>
+            {taskProjectOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className="h-8 text-xs"
+          >
+            <option value="">Semua Priority</option>
+            <option value="urgent">Urgent</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="none">No Priority</option>
+          </Select>
+          <Select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="h-8 text-xs"
+          >
+            <option value="date-desc">Terbaru</option>
+            <option value="date-asc">Terlama</option>
+            <option value="point-desc">Point (Tertinggi)</option>
+            <option value="point-asc">Point (Terendah)</option>
+            <option value="priority-desc">Priority (Urgent → Low)</option>
+            <option value="name-asc">Nama (A-Z)</option>
+          </Select>
+        </div>
+
+        {filteredAndSortedTasks.length === 0 ? (
+          <p className="py-4 text-center text-xs text-fg-subtle">Tidak ada task yang sesuai dengan filter.</p>
+        ) : (
+          <ul className="flex max-h-[360px] flex-col gap-2.5 overflow-y-auto pr-1">
+            {filteredAndSortedTasks.map((t) => (
+              <li key={t.id} className="flex items-start justify-between gap-3 border-t border-line pt-2.5 text-sm first:border-t-0 first:pt-0">
+                <div className="min-w-0">
+                  <p className="break-words">{t.name}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-fg-subtle">{projectNames.get(t.projectId) ?? "Unknown project"}</span>
+                    {t.priority !== "none" && (
+                      <>
+                        <span className="text-fg-faint">·</span>
+                        <Badge tone={PRIORITY_TONE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
+                      </>
+                    )}
+                    <span className="text-fg-faint">·</span>
+                    <span className="text-xs text-fg-subtle">{formatDate(t.completedAt)}</span>
+                  </div>
                 </div>
-              </div>
-              <span className="shrink-0 tabular-nums text-fg-subtle">
-                {t.hasUncountedEstimate ? <EstimateMissingBadge /> : `${t.point} pt`}
-              </span>
-            </li>
-          ))}
-        </ul>
+                <span className="shrink-0 tabular-nums text-fg-subtle">
+                  {t.hasUncountedEstimate ? <EstimateMissingBadge /> : `${t.point} pt`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
