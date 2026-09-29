@@ -251,6 +251,18 @@ async function scheduleNextChunk(runId: string): Promise<void> {
     }
     const headers: Record<string, string> = { "content-type": "application/json" };
     if (process.env.CRON_SECRET) headers.authorization = `Bearer ${process.env.CRON_SECRET}`;
+    // Separate from CRON_SECRET: if Vercel's own Deployment Protection
+    // ("Vercel Authentication") is on for this project, Vercel's edge itself
+    // rejects any request without a logged-in Vercel session — including
+    // this self-fetch — with a 401 "Protected deployment" before it ever
+    // reaches our route handler. Vercel Cron invocations are auto-exempted
+    // from this, but a plain fetch() isn't. This header is Vercel's own
+    // documented bypass ("Protection Bypass for Automation" in Project
+    // Settings → Deployment Protection, which provisions this env var) —
+    // confirmed as the actual cause in production.
+    if (process.env.VERCEL_AUTOMATION_BYPASS_SECRET) {
+      headers["x-vercel-protection-bypass"] = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+    }
     try {
       const res = await fetch(`https://${process.env.VERCEL_URL}/api/sync/continue`, {
         method: "POST",
