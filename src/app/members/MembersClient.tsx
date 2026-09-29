@@ -220,6 +220,15 @@ export default function MembersClient({
   const labels: FilterOption[] = projectDetail?.labels ?? [];
   const rows = data?.rows ?? [];
 
+  const stats = useMemo(() => {
+    const totalMembers = rows.length;
+    const grandTotalPoint = rows.reduce((sum, r) => sum + r.totalPoint, 0);
+    const grandTotalDoneTask = rows.reduce((sum, r) => sum + r.doneTask, 0);
+    const avgPointPerMember = totalMembers > 0 ? Math.round((grandTotalPoint / totalMembers) * 10) / 10 : 0;
+    const avgPointPerTask = grandTotalDoneTask > 0 ? Math.round((grandTotalPoint / grandTotalDoneTask) * 10) / 10 : 0;
+    return { totalMembers, grandTotalPoint, grandTotalDoneTask, avgPointPerMember, avgPointPerTask };
+  }, [rows]);
+
   const applyPreset = (offset: number) => {
     const r = monthRange(offset);
     setPeriodStart(r.start);
@@ -245,6 +254,17 @@ export default function MembersClient({
         <span className="inline-flex items-center gap-2">
           <span className="tabular-nums">{row.totalPoint}</span>
           {row.uncountedEstimateTask > 0 && <EstimateMissingBadge count={row.uncountedEstimateTask} />}
+        </span>
+      ),
+    },
+    {
+      key: "avgPointPerTask",
+      header: "Rata-rata Point / Task",
+      align: "right",
+      mobile: "field",
+      cell: (row) => (
+        <span className="tabular-nums font-medium">
+          {row.doneTask > 0 ? Math.round((row.totalPoint / row.doneTask) * 10) / 10 : 0}
         </span>
       ),
     },
@@ -331,14 +351,23 @@ export default function MembersClient({
       {error && <ConfigNotice message={error.message} />}
 
       {!error && (
-        <DataTable<MemberRow>
-          columns={columns}
-          rows={rows}
-          getRowKey={(row) => row.memberId}
-          loading={isLoading}
-          onRowClick={(row) => setSelectedMember(row)}
-          caption="Rekap point per anggota tim"
-        />
+        <div className="flex flex-col gap-5">
+          <StatGrid>
+            <StatCard label="Total Member" value={stats.totalMembers} />
+            <StatCard label="Total Point Tim" value={stats.grandTotalPoint} />
+            <StatCard label="Rata-rata Point / Member" value={stats.avgPointPerMember} />
+            <StatCard label="Rata-rata Point / Task" value={stats.avgPointPerTask} />
+          </StatGrid>
+
+          <DataTable<MemberRow>
+            columns={columns}
+            rows={rows}
+            getRowKey={(row) => row.memberId}
+            loading={isLoading}
+            onRowClick={(row) => setSelectedMember(row)}
+            caption="Rekap point per anggota tim"
+          />
+        </div>
       )}
 
       <Dialog
