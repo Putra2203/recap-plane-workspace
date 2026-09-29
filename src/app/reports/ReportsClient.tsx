@@ -95,7 +95,7 @@ export default function ReportsClient({ initialProjects }: { initialProjects: Pr
   const [projectId, setProjectId] = useState("");
   const [periodStart, setPeriodStart] = useState(thisMonth.start);
   const [periodEnd, setPeriodEnd] = useState(thisMonth.end);
-  const [dateBasis, setDateBasis] = useState<"created" | "completed">("created");
+  const [dateBasis, setDateBasis] = useState<"created" | "completed">("completed");
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -166,8 +166,8 @@ export default function ReportsClient({ initialProjects }: { initialProjects: Pr
         {type === "monthly_point" && (
           <Field label="Basis Tanggal">
             <Select value={dateBasis} onChange={(e) => setDateBasis(e.target.value as "created" | "completed")}>
-              <option value="created">Created Date</option>
               <option value="completed">Completed Date</option>
+              <option value="created">Created Date</option>
             </Select>
           </Field>
         )}

@@ -68,7 +68,7 @@ export default async function ReportHistoryDetailPage({ params }: { params: Prom
     type: filters.type,
     periodStart: filters.periodStart,
     periodEnd: filters.periodEnd,
-    dateBasis: filters.dateBasis ?? "created",
+    dateBasis: filters.dateBasis ?? "completed",
   });
   if (filters.projectId) exportParams.set("projectId", filters.projectId);
 

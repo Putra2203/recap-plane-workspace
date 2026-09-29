@@ -55,7 +55,7 @@ export async function buildReport(params: ReportParams): Promise<Report> {
   }
 
   // monthly_point
-  const dateBasis = params.dateBasis ?? "created";
+  const dateBasis = params.dateBasis ?? "completed";
   const rows = await getMemberRecapData({
     periodStart,
     periodEnd,
