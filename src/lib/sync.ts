@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { planeClient, type PlaneState, type PlaneWorkItem } from "./plane";
+import { planeClient, PlaneApiError, type PlaneState, type PlaneWorkItem } from "./plane";
 import { prisma } from "./prisma";
 
 // This is the ONLY place in the app that's allowed to be slow / hit Plane's
@@ -34,18 +34,34 @@ async function getCycleModuleMembership(
     mapWithConcurrency(
       cycles.filter((c) => c.total_issues > 0),
       async (cycle) => {
-        const ids = await planeClient.listCycleWorkItemIds(projectId, cycle.id);
-        for (const id of ids) itemCycleId.set(id, cycle.id);
+        try {
+          const ids = await planeClient.listCycleWorkItemIds(projectId, cycle.id);
+          for (const id of ids) itemCycleId.set(id, cycle.id);
+        } catch (err) {
+          if (err instanceof PlaneApiError && (err.status === 403 || err.status === 404)) {
+            console.warn(`[sync] Could not fetch cycle issues for cycle ${cycle.id} (${err.status})`);
+            return;
+          }
+          throw err;
+        }
       },
     ),
     mapWithConcurrency(
       modules.filter((m) => m.total_issues > 0),
       async (mod) => {
-        const ids = await planeClient.listModuleWorkItemIds(projectId, mod.id);
-        for (const id of ids) {
-          const set = itemModuleIds.get(id) ?? new Set<string>();
-          set.add(mod.id);
-          itemModuleIds.set(id, set);
+        try {
+          const ids = await planeClient.listModuleWorkItemIds(projectId, mod.id);
+          for (const id of ids) {
+            const set = itemModuleIds.get(id) ?? new Set<string>();
+            set.add(mod.id);
+            itemModuleIds.set(id, set);
+          }
+        } catch (err) {
+          if (err instanceof PlaneApiError && (err.status === 403 || err.status === 404)) {
+            console.warn(`[sync] Could not fetch module issues for module ${mod.id} (${err.status})`);
+            return;
+          }
+          throw err;
         }
       },
     ),
@@ -89,113 +105,121 @@ function toWorkItemRow(
 }
 
 async function syncProject(projectId: string, projectMeta: Awaited<ReturnType<typeof planeClient.listProjects>>[number]) {
-  // Fetch all 6 project resources in parallel instead of two sequential batches
-  const [items, states, cycles, modules, members, labels] = await Promise.all([
-    planeClient.listWorkItems(projectId),
-    planeClient.listStates(projectId),
-    planeClient.listCycles(projectId),
-    planeClient.listModules(projectId),
-    planeClient.listMembers(projectId),
-    planeClient.listLabels(projectId),
-  ]);
-  const statesById = new Map(states.map((s) => [s.id, s]));
-  const { itemCycleId, itemModuleIds } = await getCycleModuleMembership(projectId, cycles, modules);
+  try {
+    // Fetch all 6 project resources in parallel instead of two sequential batches
+    const [items, states, cycles, modules, members, labels] = await Promise.all([
+      planeClient.listWorkItems(projectId),
+      planeClient.listStates(projectId),
+      planeClient.listCycles(projectId),
+      planeClient.listModules(projectId),
+      planeClient.listMembers(projectId),
+      planeClient.listLabels(projectId),
+    ]);
+    const statesById = new Map(states.map((s) => [s.id, s]));
+    const { itemCycleId, itemModuleIds } = await getCycleModuleMembership(projectId, cycles, modules);
 
-  const workItemRows = items.map((item) => toWorkItemRow(item, projectId, statesById, itemCycleId, itemModuleIds));
+    const workItemRows = items.map((item) => toWorkItemRow(item, projectId, statesById, itemCycleId, itemModuleIds));
 
-  await prisma.$transaction([
-    prisma.state.deleteMany({ where: { projectId } }),
-    prisma.label.deleteMany({ where: { projectId } }),
-    prisma.cycle.deleteMany({ where: { projectId } }),
-    prisma.module.deleteMany({ where: { projectId } }),
-    prisma.workItem.deleteMany({ where: { projectId } }),
-    prisma.projectMember.deleteMany({ where: { projectId } }),
-    // Explicit field picks, not `{...s, projectId}` — Plane's API returns extra
-    // fields (created_at, is_triage, workspace, ...) that aren't in our schema
-    // and createMany rejects unknown keys.
-    ...(states.length
-      ? [
-          prisma.state.createMany({
-            data: states.map((s) => ({ id: s.id, projectId, name: s.name, color: s.color, group: s.group, sequence: s.sequence })),
-          }),
-        ]
-      : []),
-    ...(labels.length
-      ? [prisma.label.createMany({ data: labels.map((l) => ({ id: l.id, projectId, name: l.name, color: l.color })) })]
-      : []),
-    ...(cycles.length
-      ? [
-          prisma.cycle.createMany({
-            data: cycles.map((c) => ({
-              id: c.id,
-              projectId,
-              name: c.name,
-              startDate: c.start_date ? new Date(c.start_date) : null,
-              endDate: c.end_date ? new Date(c.end_date) : null,
-              totalIssues: c.total_issues,
-              completedIssues: c.completed_issues,
-              cancelledIssues: c.cancelled_issues,
-              startedIssues: c.started_issues,
-              unstartedIssues: c.unstarted_issues,
-              backlogIssues: c.backlog_issues,
-            })),
-          }),
-        ]
-      : []),
-    ...(modules.length
-      ? [
-          prisma.module.createMany({
-            data: modules.map((m) => ({
-              id: m.id,
-              projectId,
-              name: m.name,
-              totalIssues: m.total_issues,
-              completedIssues: m.completed_issues,
-            })),
-          }),
-        ]
-      : []),
-    ...(workItemRows.length ? [prisma.workItem.createMany({ data: workItemRows })] : []),
-    ...(members.length
-      ? [prisma.projectMember.createMany({ data: members.map((m) => ({ projectId, memberId: m.id, role: m.role ?? null })) })]
-      : []),
-    prisma.project.upsert({
-      where: { id: projectId },
-      create: {
-        id: projectId,
-        name: projectMeta.name,
-        identifier: projectMeta.identifier,
-        memberCount: projectMeta.total_members,
-        totalCycles: projectMeta.total_cycles,
-        totalModules: projectMeta.total_modules,
-      },
-      update: {
-        name: projectMeta.name,
-        identifier: projectMeta.identifier,
-        memberCount: projectMeta.total_members,
-        totalCycles: projectMeta.total_cycles,
-        totalModules: projectMeta.total_modules,
-        syncedAt: new Date(),
-      },
-    }),
-  ]);
+    await prisma.$transaction([
+      prisma.state.deleteMany({ where: { projectId } }),
+      prisma.label.deleteMany({ where: { projectId } }),
+      prisma.cycle.deleteMany({ where: { projectId } }),
+      prisma.module.deleteMany({ where: { projectId } }),
+      prisma.workItem.deleteMany({ where: { projectId } }),
+      prisma.projectMember.deleteMany({ where: { projectId } }),
+      // Explicit field picks, not `{...s, projectId}` — Plane's API returns extra
+      // fields (created_at, is_triage, workspace, ...) that aren't in our schema
+      // and createMany rejects unknown keys.
+      ...(states.length
+        ? [
+            prisma.state.createMany({
+              data: states.map((s) => ({ id: s.id, projectId, name: s.name, color: s.color, group: s.group, sequence: s.sequence })),
+            }),
+          ]
+        : []),
+      ...(labels.length
+        ? [prisma.label.createMany({ data: labels.map((l) => ({ id: l.id, projectId, name: l.name, color: l.color })) })]
+        : []),
+      ...(cycles.length
+        ? [
+            prisma.cycle.createMany({
+              data: cycles.map((c) => ({
+                id: c.id,
+                projectId,
+                name: c.name,
+                startDate: c.start_date ? new Date(c.start_date) : null,
+                endDate: c.end_date ? new Date(c.end_date) : null,
+                totalIssues: c.total_issues,
+                completedIssues: c.completed_issues,
+                cancelledIssues: c.cancelled_issues,
+                startedIssues: c.started_issues,
+                unstartedIssues: c.unstarted_issues,
+                backlogIssues: c.backlog_issues,
+              })),
+            }),
+          ]
+        : []),
+      ...(modules.length
+        ? [
+            prisma.module.createMany({
+              data: modules.map((m) => ({
+                id: m.id,
+                projectId,
+                name: m.name,
+                totalIssues: m.total_issues,
+                completedIssues: m.completed_issues,
+              })),
+            }),
+          ]
+        : []),
+      ...(workItemRows.length ? [prisma.workItem.createMany({ data: workItemRows })] : []),
+      ...(members.length
+        ? [prisma.projectMember.createMany({ data: members.map((m) => ({ projectId, memberId: m.id, role: m.role ?? null })) })]
+        : []),
+      prisma.project.upsert({
+        where: { id: projectId },
+        create: {
+          id: projectId,
+          name: projectMeta.name,
+          identifier: projectMeta.identifier,
+          memberCount: projectMeta.total_members,
+          totalCycles: projectMeta.total_cycles,
+          totalModules: projectMeta.total_modules,
+        },
+        update: {
+          name: projectMeta.name,
+          identifier: projectMeta.identifier,
+          memberCount: projectMeta.total_members,
+          totalCycles: projectMeta.total_cycles,
+          totalModules: projectMeta.total_modules,
+          syncedAt: new Date(),
+        },
+      }),
+    ]);
 
-  // Bulk upsert all members in a single database transaction instead of N sequential awaits
-  const uniqueMembersMap = new Map(members.map((m) => [m.id, m]));
-  const uniqueMembers = Array.from(uniqueMembersMap.values());
-  if (uniqueMembers.length > 0) {
-    await prisma.$transaction(
-      uniqueMembers.map((m) =>
-        prisma.member.upsert({
-          where: { id: m.id },
-          create: { id: m.id, firstName: m.first_name, lastName: m.last_name, email: m.email, displayName: m.display_name },
-          update: { firstName: m.first_name, lastName: m.last_name, email: m.email, displayName: m.display_name, syncedAt: new Date() },
-        })
-      )
-    );
+    // Bulk upsert all members in a single database transaction instead of N sequential awaits
+    const uniqueMembersMap = new Map(members.map((m) => [m.id, m]));
+    const uniqueMembers = Array.from(uniqueMembersMap.values());
+    if (uniqueMembers.length > 0) {
+      await prisma.$transaction(
+        uniqueMembers.map((m) =>
+          prisma.member.upsert({
+            where: { id: m.id },
+            create: { id: m.id, firstName: m.first_name, lastName: m.last_name, email: m.email, displayName: m.display_name },
+            update: { firstName: m.first_name, lastName: m.last_name, email: m.email, displayName: m.display_name, syncedAt: new Date() },
+          })
+        )
+      );
+    }
+
+    return { workItemCount: items.length };
+  } catch (err) {
+    if (err instanceof PlaneApiError && (err.status === 403 || err.status === 404)) {
+      console.warn(`[sync] Skipping project ${projectMeta.name} (${projectId}) due to ${err.status} error: ${err.message}`);
+      return { workItemCount: 0 };
+    }
+    throw err;
   }
-
-  return { workItemCount: items.length };
 }
 
 // Vercel's Hobby plan hard-caps a function's maxDuration at 60s, and per

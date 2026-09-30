@@ -30,7 +30,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const MAX_RETRIES = 4;
+const MAX_RETRIES = 6;
 
 async function planeGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   assertConfigured();
@@ -48,14 +48,14 @@ async function planeGet<T>(path: string, params?: Record<string, string | number
         headers: { "X-API-Key": API_TOKEN, "Content-Type": "application/json" },
         // Analytics/report pages want fresh data; caller can wrap with Next.js cache if needed.
         cache: "no-store",
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(15000),
       });
     } catch (networkErr) {
       // Cloudflare in front of this instance sometimes resets the
       // connection outright under burst load instead of returning a clean
       // 429, which surfaces here as a generic fetch TypeError.
       if (attempt < MAX_RETRIES) {
-        await sleep(500 * 2 ** attempt);
+        await sleep(1000 * 2 ** attempt + Math.random() * 500);
         continue;
       }
       const message = networkErr instanceof Error ? networkErr.message : String(networkErr);
@@ -67,7 +67,7 @@ async function planeGet<T>(path: string, params?: Record<string, string | number
     if (res.status === 429 && attempt < MAX_RETRIES) {
       const retryAfterHeader = res.headers.get("Retry-After");
       const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : NaN;
-      const backoffMs = Number.isFinite(retryAfterMs) ? retryAfterMs : 500 * 2 ** attempt;
+      const backoffMs = Number.isFinite(retryAfterMs) ? retryAfterMs : 1000 * 2 ** attempt + Math.random() * 500;
       await sleep(backoffMs);
       continue;
     }
@@ -118,6 +118,8 @@ export interface PlaneProject {
   total_members: number;
   total_cycles: number;
   total_modules: number;
+  is_member?: boolean;
+  member_role?: number | null;
 }
 
 export interface PlaneState {
